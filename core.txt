@@ -1,0 +1,11 @@
+AG/
+│
+├── core/
+├── memory/
+├── tasks/
+├── audio/
+├── vision/
+├── database/
+├── logs/
+│
+└── ag.py
