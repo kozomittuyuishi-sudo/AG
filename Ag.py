@@ -1,18 +1,19 @@
+import json
+import os
 import subprocess
+from datetime import datetime
+
 from brain import ask_brain
 from dotenv import load_dotenv
-import os
 
 load_dotenv()
 
-import json
-import os
-
 MEMORY_FILE = "memory.json"
+PROJECT_FILE = "project_context.json"
+TASK_FILE = "tasks.json"
 
 
 def load_memory():
-    """Load long-term memory from memory.json and ensure category structure exists."""
     default_memory = {
         "general": {},
         "projects": {},
@@ -30,7 +31,6 @@ def load_memory():
         with open(MEMORY_FILE, "r", encoding="utf-8") as file:
             memory = json.load(file)
 
-        # If old flat memory exists, move it into general
         if not any(category in memory for category in default_memory):
             old_memory = memory
             memory = default_memory
@@ -38,7 +38,6 @@ def load_memory():
             save_memory(memory)
             return memory
 
-        # Ensure all categories exist
         for category in default_memory:
             if category not in memory:
                 memory[category] = {}
@@ -50,28 +49,79 @@ def load_memory():
         print("AG: Memory file is damaged or empty. Starting with structured blank memory.")
         save_memory(default_memory)
         return default_memory
-    
+
+
 def save_memory(memory):
-    """Save long-term memory to memory.json."""
     with open(MEMORY_FILE, "w", encoding="utf-8") as file:
         json.dump(memory, file, indent=4)
 
 
+def load_project_context():
+    if not os.path.exists(PROJECT_FILE):
+        return None
+
+    try:
+        with open(PROJECT_FILE, "r", encoding="utf-8") as file:
+            return json.load(file)
+
+    except Exception:
+        return None
+
+
+def load_tasks():
+    default_tasks = {
+        "active": [],
+        "completed": []
+    }
+
+    if not os.path.exists(TASK_FILE):
+        save_tasks(default_tasks)
+        return default_tasks
+
+    try:
+        with open(TASK_FILE, "r", encoding="utf-8") as file:
+            tasks = json.load(file)
+
+        if "active" not in tasks:
+            tasks["active"] = []
+
+        if "completed" not in tasks:
+            tasks["completed"] = []
+
+        save_tasks(tasks)
+        return tasks
+
+    except json.JSONDecodeError:
+        save_tasks(default_tasks)
+        return default_tasks
+
+
+def save_tasks(tasks):
+    with open(TASK_FILE, "w", encoding="utf-8") as file:
+        json.dump(tasks, file, indent=4)
+
+
 def startup():
-    print("AG: Good evening.")
+    current_hour = datetime.now().hour
+
+    if 5 <= current_hour < 12:
+        greeting = "Good morning."
+    elif 12 <= current_hour < 17:
+        greeting = "Good afternoon."
+    elif 17 <= current_hour < 22:
+        greeting = "Good evening."
+    else:
+        greeting = "You're awake at an unreasonable hour."
+
+    print(f"AG: {greeting}")
     print("AG: Systems operational.")
     print("AG: Memory loaded.")
+    print("AG: Project context available.")
+    print("AG: Tasks loaded.")
     print("AG: Ready.")
 
 
 def remember_fact(user_input, memory):
-    """
-    Handles commands like:
-    remember parker is the agros sports sedan
-    remember i am building AG
-    Stores default facts in general memory.
-    """
-
     fact = user_input.replace("remember ", "", 1).strip().lower()
 
     if " is " in fact:
@@ -97,18 +147,9 @@ def remember_fact(user_input, memory):
         return f"AG: Memory stored in general. You are {value}."
 
     return f"AG: Memory stored in general. {key.capitalize()} is {value}."
-  
+
 
 def recall_fact(user_input, memory):
-    """
-    Handles questions like:
-    what is parker
-    who is parker
-    what am i
-    who am i
-    Searches all memory categories.
-    """
-
     cleaned_input = user_input.strip().lower().replace("?", "")
 
     if cleaned_input in ["what am i", "who am i", "what is me", "who is me"]:
@@ -128,9 +169,9 @@ def recall_fact(user_input, memory):
             return f"AG: {key.capitalize()} is {contents[key]}. Stored in {category}."
 
     return f"AG: I do not have memory of '{key}'. Yet."
-def show_memory(memory):
-    """Display all stored memory categories and contents."""
 
+
+def show_memory(memory):
     response = "AG: Current stored memory:\n"
 
     for category, contents in memory.items():
@@ -146,14 +187,163 @@ def show_memory(memory):
 
 
 def open_memory_file():
-    """Open File Explorer and select memory.json."""
-
     if os.path.exists(MEMORY_FILE):
         file_path = os.path.abspath(MEMORY_FILE)
         subprocess.run(["explorer", "/select,", file_path])
         return "AG: Opening File Explorer and selecting memory.json."
 
     return "AG: Memory file not found. Concerning, considering memory was the assignment."
+
+
+def generate_memory_summary(question, answer):
+    prompt = f"""
+Create a memory entry from this information.
+
+Question:
+{question}
+
+Answer:
+{answer}
+
+Rules:
+- Return ONLY this format:
+
+KEY: <short key>
+
+SUMMARY: <short summary>
+
+Example:
+
+KEY: gravity
+
+SUMMARY: Force that attracts masses toward each other.
+"""
+
+    response = ask_brain(prompt)
+    return response
+
+
+def project_status():
+    project = load_project_context()
+
+    if not project:
+        return "AG: Project context unavailable."
+
+    completed = project.get("completed_milestones", [])
+
+    response = (
+        f"AG Project Status\n\n"
+        f"Project: {project.get('full_name', 'Unknown')}\n"
+        f"Short Name: {project.get('project_name', 'Unknown')}\n"
+        f"Version: {project.get('current_version', 'Unknown')}\n"
+        f"Phase: {project.get('current_phase', 'Unknown')}\n"
+        f"Objective: {project.get('current_objective', 'Unknown')}\n\n"
+        f"Completed Milestones: {len(completed)}\n"
+        f"Next Milestone: {project.get('next_milestone', 'Unknown')}\n\n"
+        f"Rule: {project.get('development_rule', 'No rule set. Dangerous. Very human.')}"
+    )
+
+    return response
+
+
+def project_name():
+    project = load_project_context()
+
+    if not project:
+        return "AG: Project context unavailable."
+
+    return (
+        f"AG: You are building "
+        f"{project.get('full_name', 'Unknown')} "
+        f"({project.get('project_name', 'Unknown')})."
+    )
+
+
+def next_step():
+    project = load_project_context()
+
+    if not project:
+        return "AG: Project context unavailable."
+
+    return (
+        f"AG: Next milestone: "
+        f"{project.get('next_milestone', 'Unknown')}."
+    )
+
+
+def show_completed_milestones():
+    project = load_project_context()
+
+    if not project:
+        return "AG: Project context unavailable."
+
+    milestones = project.get("completed_milestones", [])
+
+    if not milestones:
+        return "AG: No completed milestones recorded. A bold and empty legacy."
+
+    response = "AG: Completed milestones:\n"
+
+    for index, milestone in enumerate(milestones, start=1):
+        response += f"{index}. {milestone}\n"
+
+    return response
+
+
+def add_task(user_input, tasks):
+    task = user_input.replace("add task", "", 1).strip()
+
+    if not task:
+        return "AG: Task cannot be empty. Even chaos needs content."
+
+    tasks["active"].append(task)
+    save_tasks(tasks)
+
+    return f"AG: Task added. Active tasks: {len(tasks['active'])}."
+
+
+def show_tasks(tasks):
+    if not tasks["active"]:
+        return "AG: No active tasks. Suspiciously peaceful."
+
+    response = "AG: Active tasks:\n"
+
+    for index, task in enumerate(tasks["active"], start=1):
+        response += f"{index}. {task}\n"
+
+    return response
+
+
+def complete_task(user_input, tasks):
+    number_text = user_input.replace("complete task", "", 1).strip()
+
+    if not number_text.isdigit():
+        return "AG: Specify the task number. Numbers remain useful, despite humanity."
+
+    task_index = int(number_text) - 1
+
+    if task_index < 0 or task_index >= len(tasks["active"]):
+        return "AG: Task number invalid. Reality refuses the request."
+
+    task = tasks["active"].pop(task_index)
+    tasks["completed"].append(task)
+    save_tasks(tasks)
+
+    return f"AG: Task completed: {task}. Progress detected. Rare, but welcome."
+
+
+def show_completed_tasks(tasks):
+    if not tasks["completed"]:
+        return "AG: No completed tasks yet. A blank monument to intention."
+
+    response = "AG: Completed tasks:\n"
+
+    for index, task in enumerate(tasks["completed"], start=1):
+        response += f"{index}. {task}\n"
+
+    return response
+
+
 def detect_intent(user_input):
     text = user_input.strip().lower().replace("?", "")
 
@@ -172,16 +362,41 @@ def detect_intent(user_input):
 
     if text in ["hello", "hi", "hey"]:
         return "greeting"
+
     if text in ["show memory", "list memory", "list memories"]:
         return "show_memory"
 
     if text in ["open memory file", "open memory", "show memory file"]:
         return "open_memory_file"
 
+    if text in ["project status", "status", "ag status"]:
+        return "project_status"
+
+    if text in ["what am i building", "what project am i building"]:
+        return "project_name"
+
+    if text in ["what is next", "next milestone", "next objective"]:
+        return "next_step"
+
+    if text in ["completed milestones", "show milestones", "what is completed", "what have we completed"]:
+        return "completed_milestones"
+
+    if text.startswith("add task "):
+        return "add_task"
+
+    if text in ["show tasks", "list tasks", "active tasks"]:
+        return "show_tasks"
+
+    if text.startswith("complete task "):
+        return "complete_task"
+
+    if text in ["show completed tasks", "completed tasks", "list completed tasks"]:
+        return "show_completed_tasks"
+
     return "unknown"
 
 
-def process_input(user_input, memory):
+def process_input(user_input, memory, tasks):
     intent = detect_intent(user_input)
 
     if intent == "shutdown":
@@ -191,27 +406,139 @@ def process_input(user_input, memory):
         return remember_fact(user_input, memory)
 
     if intent == "recall":
-        return recall_fact(user_input, memory)
+        result = recall_fact(user_input, memory)
+
+        if "I do not have memory of" not in result:
+            return result
+
+        return "AG: " + ask_brain(user_input)
 
     if intent == "greeting":
         return "AG: Hello. Systems remain functional, despite the evidence."
+
     if intent == "show_memory":
         return show_memory(memory)
 
     if intent == "open_memory_file":
         return open_memory_file()
 
-    # Fallback to brain for unknown intents
+    if intent == "project_status":
+        return project_status()
+
+    if intent == "project_name":
+        return project_name()
+
+    if intent == "next_step":
+        return next_step()
+
+    if intent == "completed_milestones":
+        return show_completed_milestones()
+
+    if intent == "add_task":
+        return add_task(user_input, tasks)
+
+    if intent == "show_tasks":
+        return show_tasks(tasks)
+
+    if intent == "complete_task":
+        return complete_task(user_input, tasks)
+
+    if intent == "show_completed_tasks":
+        return show_completed_tasks(tasks)
+
     return "AG: " + ask_brain(user_input)
+
 
 def main():
     memory = load_memory()
+    tasks = load_tasks()
     startup()
+
+    last_brain_answer = None
+    pending_store = False
+    pending_category = False
 
     while True:
         user_input = input("You: ")
+        cleaned_input = user_input.strip().lower()
 
-        response = process_input(user_input, memory)
+        if pending_store:
+            if cleaned_input in ["yes", "y", "store", "save", "save it", "store it"]:
+                pending_store = False
+                pending_category = True
+
+                print("AG: Where should I store it?")
+                print("AG: 1. General")
+                print("AG: 2. Projects")
+                print("AG: 3. Vehicles")
+                print("AG: 4. Characters")
+                print("AG: 5. Notes")
+                print("AG: 6. Tasks")
+                continue
+
+            if cleaned_input in ["no", "n", "dont", "don't", "skip"]:
+                pending_store = False
+                last_brain_answer = None
+                print("AG: Not stored. The cloud shall be bothered again later, apparently.")
+                continue
+
+        if pending_category:
+            category_map = {
+                "1": "general",
+                "general": "general",
+                "2": "projects",
+                "projects": "projects",
+                "3": "vehicles",
+                "vehicles": "vehicles",
+                "4": "characters",
+                "characters": "characters",
+                "5": "notes",
+                "notes": "notes",
+                "6": "tasks",
+                "tasks": "tasks"
+            }
+
+            if cleaned_input in category_map:
+                category = category_map[cleaned_input]
+
+                summary = generate_memory_summary(
+                    last_brain_answer["question"],
+                    last_brain_answer["answer"]
+                )
+
+                try:
+                    lines = summary.splitlines()
+
+                    key_line = next(
+                        line for line in lines
+                        if line.upper().startswith("KEY:")
+                    )
+
+                    summary_line = next(
+                        line for line in lines
+                        if line.upper().startswith("SUMMARY:")
+                    )
+
+                    key = key_line.split(":", 1)[1].strip().lower()
+                    value = summary_line.split(":", 1)[1].strip()
+
+                except Exception:
+                    key = last_brain_answer["question"].lower().replace("?", "").strip()
+                    value = last_brain_answer["answer"]
+
+                memory[category][key] = value
+                save_memory(memory)
+
+                print(f"AG: Stored '{key}' under {category}.")
+
+                pending_category = False
+                last_brain_answer = None
+                continue
+
+            print("AG: Invalid category. Choose 1-6. A number. Humanity has used them before.")
+            continue
+
+        response = process_input(user_input, memory, tasks)
 
         if response == "shutdown":
             print("AG: Shutting down.")
@@ -219,6 +546,15 @@ def main():
             break
 
         print(response)
+
+        if response.startswith("AG: ") and detect_intent(user_input) == "unknown":
+            last_brain_answer = {
+                "question": user_input,
+                "answer": response.replace("AG: ", "", 1)
+            }
+
+            pending_store = True
+            print("AG: Should I store this for future access?")
 
 
 if __name__ == "__main__":

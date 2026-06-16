@@ -2,11 +2,15 @@
     "general": {
         "me": "building ag",
         "parker": "the agros sports sedan",
-        "yuishi": "the creator of ag"
+        "yuishi": "the creator of ag",
+        "sky": "blue",
+        "ag project": "Building AG, a context-aware personal operating assistant for productivity, memory, technical explanation, workflow guidance, architecture, and calm direct decision support."
     },
     "projects": {},
     "vehicles": {},
     "characters": {},
-    "notes": {},
+    "notes": {
+        "explain gravity in one sentence": "Gravity is the curvature of spacetime caused by mass and energy, making objects follow paths that look like attraction."
+    },
     "tasks": {}
 }

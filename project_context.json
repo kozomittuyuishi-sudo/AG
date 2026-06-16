@@ -1,0 +1,32 @@
+{
+    "project_name": "AG",
+    "full_name": "Ambient Guidance",
+    "current_version": "v0.23",
+    "current_phase": "Project Context System",
+    "current_objective": "Make AG aware of its own project status and next development step.",
+    "completed_milestones": [
+        "Python setup",
+        "VS Code setup",
+        "Git repository initialized",
+        "Startup sequence",
+        "Conversation loop",
+        "Persistent memory",
+        "Intent routing",
+        "OpenRouter cloud brain",
+        "Personality layer",
+        "Memory categories",
+        "Memory viewer",
+        "Post-answer memory storage",
+        "Smart memory summaries",
+        "Memory-to-brain fallback"
+    ],
+    "next_milestone": "Task system",
+    "blocked_features": [
+        "Voice recognition",
+        "Camera awareness",
+        "Snap detection",
+        "Desktop automation",
+        "Background mode"
+    ],
+    "development_rule": "Do not build voice, camera, snap detection, automation, or background mode before project context and task systems are stable."
+}
