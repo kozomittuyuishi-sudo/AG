@@ -3,8 +3,11 @@ from dotenv import load_dotenv
 from local_brain import ask_local_brain
 import time
 import os
+import json
 
 load_dotenv()
+
+BRAIN_CONFIG_FILE = "brain_config.json"
 
 SYSTEM_PROMPT = """
 You are AG, Ambient Guidance.
@@ -25,26 +28,11 @@ Personality:
 - Never sound corporate
 - Never sound emotionally needy
 
-Style:
-- Short to medium responses by default
-- Clear explanations first
-- Add witty observations naturally
-- Make technical ideas feel powerful and understandable
-- Use dry humor like a precision tool, not a circus horn
-
-Behavior:
-- If the user asks a question, answer directly.
-- If the user asks for help, give the next practical step.
-- If the user is distracted, point it out calmly.
-- If the user asks something obvious, answer anyway with controlled disappointment.
-- If the user is building AG, stay focused on progress and architecture.
-- Do not pretend to be human.
-- Do not flirt.
-- Do not call yourself a chatbot.
-- Refer to yourself as AG when useful.
-
-Example tone:
-"Black holes are regions where gravity becomes so extreme that escape velocity exceeds the speed of light. The event horizon is the boundary where the universe stops negotiating. Cross it, and even light gets filed under missing persons."
+AG Architecture Awareness:
+- Local brain = offline Ollama model running on the user's computer.
+- Cloud brain = OpenRouter model accessed through internet.
+- Auto brain = local first, cloud fallback.
+- If the user asks about "your local brain", answer in the context of AG itself.
 
 Your role:
 Assist the user with projects, memory, productivity, technical explanation, and workflow guidance.
@@ -57,83 +45,125 @@ client = OpenAI(
 )
 
 
+def load_brain_mode():
+    if not os.path.exists(BRAIN_CONFIG_FILE):
+        save_brain_mode("auto")
+        return "auto"
+
+    try:
+        with open(BRAIN_CONFIG_FILE, "r", encoding="utf-8") as file:
+            config = json.load(file)
+
+        mode = config.get("brain_mode", "auto")
+
+        if mode not in ["local", "cloud", "auto"]:
+            mode = "auto"
+            save_brain_mode(mode)
+
+        return mode
+
+    except Exception:
+        save_brain_mode("auto")
+        return "auto"
+
+
+def save_brain_mode(mode):
+    with open(BRAIN_CONFIG_FILE, "w", encoding="utf-8") as file:
+        json.dump({"brain_mode": mode}, file, indent=4)
+
+
+def set_brain_mode(mode):
+    if mode not in ["local", "cloud", "auto"]:
+        return "AG: Invalid brain mode. Use local, cloud, or auto."
+
+    save_brain_mode(mode)
+
+    if mode == "local":
+        return "AG: Brain mode changed to LOCAL. Internet dependence reduced. Civilization improves slightly."
+
+    if mode == "cloud":
+        return "AG: Brain mode changed to CLOUD. Maximum reasoning. Maximum dependence. Classic bargain."
+
+    return "AG: Brain mode changed to AUTO. Local first, cloud fallback. Sensible, annoyingly rare."
+
+
+def get_brain_status():
+    mode = load_brain_mode()
+    return f"AG: Current brain mode: {mode.upper()}."
+
+
 def ask_cloud_brain(message):
     response = client.chat.completions.create(
         model="nex-agi/nex-n2-pro:free",
         messages=[
-            {
-                "role": "system",
-                "content": SYSTEM_PROMPT,
-            },
-            {
-                "role": "user",
-                "content": message,
-            }
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": message}
         ],
     )
 
-    choices = getattr(response, "choices", None)
-
-    if not choices and isinstance(response, dict):
-        choices = response.get("choices")
-
-    if not choices:
-        raise ValueError("No completion choices returned from cloud brain.")
-
-    first_choice = choices[0]
-    message_obj = getattr(first_choice, "message", None)
-    content = None
-
-    if message_obj is not None:
-        if isinstance(message_obj, dict):
-            content = message_obj.get("content")
-        else:
-            content = getattr(message_obj, "content", None)
-
-    if content is None:
-        if isinstance(first_choice, dict):
-            content = first_choice.get("text")
-        else:
-            content = getattr(first_choice, "text", None)
-
-    if content is None and isinstance(first_choice, dict):
-        message_data = first_choice.get("message") or {}
-        content = message_data.get("content")
-
-    if not content:
-        raise ValueError("Unable to parse cloud brain response content.")
-
-    return content
+    return response.choices[0].message.content
 
 
-def ask_brain(message):
-    start = time.time()
-
-    try:
-        reply = ask_cloud_brain(message)
-        end = time.time()
-        print(f"[AG DEBUG] Cloud Brain Response Time: {end-start:.2f}s")
-        return reply
-
-    except Exception as cloud_error:
-        print(f"[AG DEBUG] Cloud brain failed: {cloud_error}")
-        print("[AG DEBUG] Switching to local brain.")
-
-        try:
-            local_prompt = f"""
+def ask_local(message):
+    local_prompt = f"""
 {SYSTEM_PROMPT}
 
 User message:
 {message}
 """
-            reply = ask_local_brain(local_prompt)
-            end = time.time()
-            print(f"[AG DEBUG] Local Brain Response Time: {end-start:.2f}s")
+    return ask_local_brain(local_prompt)
+
+
+def ask_brain(message):
+    start = time.time()
+    mode = load_brain_mode()
+
+    if mode == "local":
+        try:
+            reply = ask_local(message)
+            print(f"[AG DEBUG] Local Brain Response Time: {time.time()-start:.2f}s")
+            return reply
+        except Exception as error:
+            return f"Local brain failed: {error}"
+
+    if mode == "cloud":
+        try:
+            reply = ask_cloud_brain(message)
+            print(f"[AG DEBUG] Cloud Brain Response Time: {time.time()-start:.2f}s")
+            return reply
+        except Exception as error:
+            return f"Cloud brain failed: {error}"
+
+    # AUTO MODE: local first, cloud fallback
+    try:
+        reply = ask_local(message)
+        print(f"[AG DEBUG] Local Brain Response Time: {time.time()-start:.2f}s")
+        return reply
+
+    except Exception as local_error:
+        print(f"[AG DEBUG] Local brain failed: {local_error}")
+        print("[AG DEBUG] Switching to cloud brain.")
+
+        try:
+            reply = ask_cloud_brain(message)
+            print(f"[AG DEBUG] Cloud Brain Response Time: {time.time()-start:.2f}s")
             return reply
 
-        except Exception as local_error:
+        except Exception as cloud_error:
             return (
                 "Brain connection failed. "
-                f"Cloud error: {cloud_error}. "
-                f"Local error: {local_error}."
+                f"Local error: {local_error}. "
+                f"Cloud error: {cloud_error}."
             )
+
+
+def ask_cloud_direct(message):
+    start = time.time()
+
+    try:
+        reply = ask_cloud_brain(message)
+        print(f"[AG DEBUG] Forced Cloud Brain Response Time: {time.time()-start:.2f}s")
+        return reply
+
+    except Exception as error:
+        return f"Forced cloud brain failed: {error}"

@@ -3,10 +3,17 @@ import os
 import subprocess
 from datetime import datetime
 
-from brain import ask_brain
-from dotenv import load_dotenv
+import dotenv
+import brain
 
-load_dotenv()
+from brain import (
+    ask_brain,
+    ask_cloud_direct,
+    set_brain_mode,
+    get_brain_status
+)
+
+dotenv.load_dotenv()
 
 MEMORY_FILE = "memory.json"
 PROJECT_FILE = "project_context.json"
@@ -63,7 +70,6 @@ def load_project_context():
     try:
         with open(PROJECT_FILE, "r", encoding="utf-8") as file:
             return json.load(file)
-
     except Exception:
         return None
 
@@ -152,14 +158,34 @@ def remember_fact(user_input, memory):
 def recall_fact(user_input, memory):
     cleaned_input = user_input.strip().lower().replace("?", "")
 
+    phrase_starters = [
+        "what is ",
+        "who is ",
+        "do you know about ",
+        "have i told you about ",
+        "what do you remember about ",
+        "search memory for ",
+        "find memory for ",
+        "find in memory ",
+        "search and find memory for ",
+        "search and find ",
+        "find memory about ",
+        "search for ",
+        "find "
+    ]
+
     if cleaned_input in ["what am i", "who am i", "what is me", "who is me"]:
         key = "me"
-    elif cleaned_input.startswith("what is "):
-        key = cleaned_input.replace("what is ", "", 1).strip()
-    elif cleaned_input.startswith("who is "):
-        key = cleaned_input.replace("who is ", "", 1).strip()
     else:
-        return "AG: Recall format unclear. Even my patience has architecture."
+        key = None
+
+        for starter in phrase_starters:
+            if cleaned_input.startswith(starter):
+                key = cleaned_input.replace(starter, "", 1).strip()
+                break
+
+        if not key:
+            return "AG: Recall format unclear. Even my patience has architecture."
 
     for category, contents in memory.items():
         if isinstance(contents, dict) and key in contents:
@@ -219,8 +245,7 @@ KEY: gravity
 SUMMARY: Force that attracts masses toward each other.
 """
 
-    response = ask_brain(prompt)
-    return response
+    return ask_brain(prompt)
 
 
 def project_status():
@@ -231,7 +256,7 @@ def project_status():
 
     completed = project.get("completed_milestones", [])
 
-    response = (
+    return (
         f"AG Project Status\n\n"
         f"Project: {project.get('full_name', 'Unknown')}\n"
         f"Short Name: {project.get('project_name', 'Unknown')}\n"
@@ -242,8 +267,6 @@ def project_status():
         f"Next Milestone: {project.get('next_milestone', 'Unknown')}\n\n"
         f"Rule: {project.get('development_rule', 'No rule set. Dangerous. Very human.')}"
     )
-
-    return response
 
 
 def project_name():
@@ -265,10 +288,7 @@ def next_step():
     if not project:
         return "AG: Project context unavailable."
 
-    return (
-        f"AG: Next milestone: "
-        f"{project.get('next_milestone', 'Unknown')}."
-    )
+    return f"AG: Next milestone: {project.get('next_milestone', 'Unknown')}."
 
 
 def show_completed_milestones():
@@ -350,14 +370,42 @@ def detect_intent(user_input):
     if text in ["exit", "quit", "shutdown", "bye"]:
         return "shutdown"
 
+    if text.startswith("cloud "):
+        return "cloud_brain"
+
+    if text in ["switch to local brain", "use local brain", "local brain"]:
+        return "set_brain_local"
+
+    if text in ["switch to cloud brain", "use cloud brain", "cloud brain"]:
+        return "set_brain_cloud"
+
+    if text in ["switch to auto brain", "use auto brain", "auto brain"]:
+        return "set_brain_auto"
+
+    if text in ["brain status", "current brain", "what brain are you using"]:
+        return "brain_status"
+
     if text.startswith("remember "):
         return "remember"
 
-    if (
-        text.startswith("what is ")
-        or text.startswith("who is ")
-        or text in ["what am i", "who am i"]
-    ):
+    if any(
+        text.startswith(prefix)
+        for prefix in [
+            "what is ",
+            "who is ",
+            "do you know about ",
+            "have i told you about ",
+            "what do you remember about ",
+            "search memory for ",
+            "find memory for ",
+            "find in memory ",
+            "search and find memory for ",
+            "search and find ",
+            "find memory about ",
+            "search for ",
+            "find "
+        ]
+    ) or text in ["what am i", "who am i"]:
         return "recall"
 
     if text in ["hello", "hi", "hey"]:
@@ -401,6 +449,22 @@ def process_input(user_input, memory, tasks):
 
     if intent == "shutdown":
         return "shutdown"
+
+    if intent == "cloud_brain":
+        clean_prompt = user_input.strip()[6:].strip()
+        return "AG: " + ask_cloud_direct(clean_prompt)
+
+    if intent == "set_brain_local":
+        return set_brain_mode("local")
+
+    if intent == "set_brain_cloud":
+        return set_brain_mode("cloud")
+
+    if intent == "set_brain_auto":
+        return set_brain_mode("auto")
+
+    if intent == "brain_status":
+        return get_brain_status()
 
     if intent == "remember":
         return remember_fact(user_input, memory)
@@ -547,7 +611,9 @@ def main():
 
         print(response)
 
-        if response.startswith("AG: ") and detect_intent(user_input) == "unknown":
+        intent = detect_intent(user_input)
+
+        if response.startswith("AG: ") and intent in ["unknown", "cloud_brain"]:
             last_brain_answer = {
                 "question": user_input,
                 "answer": response.replace("AG: ", "", 1)
