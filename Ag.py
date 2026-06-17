@@ -311,7 +311,24 @@ def show_completed_milestones():
 
 
 def add_task(user_input, tasks):
-    task = user_input.replace("add task", "", 1).strip()
+    task = user_input.strip()
+
+    prefixes = [
+        "add task",
+        "add this to my tasks",
+        "add this task",
+        "create task",
+        "create a task",
+        "i need to do",
+        "i have to do",
+        "i should do",
+        "remind me to"
+    ]
+
+    for prefix in prefixes:
+        if task.lower().startswith(prefix):
+            task = task[len(prefix):].strip()
+            break
 
     if not task:
         return "AG: Task cannot be empty. Even chaos needs content."
@@ -335,7 +352,25 @@ def show_tasks(tasks):
 
 
 def complete_task(user_input, tasks):
-    number_text = user_input.replace("complete task", "", 1).strip()
+    text = user_input.strip().lower()
+
+    prefixes = [
+        "complete task",
+        "finish task",
+        "mark task",
+        "mark task number",
+        "i completed task",
+        "task completed"
+    ]
+
+    number_text = text
+
+    for prefix in prefixes:
+        if text.startswith(prefix):
+            number_text = text.replace(prefix, "", 1).strip()
+            break
+
+    number_text = number_text.replace("done", "").strip()
 
     if not number_text.isdigit():
         return "AG: Specify the task number. Numbers remain useful, despite humanity."
@@ -417,29 +452,107 @@ def detect_intent(user_input):
     if text in ["open memory file", "open memory", "show memory file"]:
         return "open_memory_file"
 
-    if text in ["project status", "status", "ag status"]:
+    if text in [
+        "project status",
+        "status",
+        "ag status",
+        "how is ag doing",
+        "where are we",
+        "where are we at",
+        "show progress",
+        "how far have we come",
+        "project progress"
+    ]:
         return "project_status"
 
-    if text in ["what am i building", "what project am i building"]:
+    if text in [
+        "what am i building",
+        "what project am i building",
+        "what are we building",
+        "what is ag",
+        "what project is this"
+    ]:
         return "project_name"
 
-    if text in ["what is next", "next milestone", "next objective"]:
+    if text in [
+        "what is next",
+        "next milestone",
+        "next objective",
+        "what should we build next",
+        "what's next",
+        "our next step",
+        "what should we do next",
+        "where do we go from here"
+    ]:
         return "next_step"
 
-    if text in ["completed milestones", "show milestones", "what is completed", "what have we completed"]:
+    if text in [
+        "completed milestones",
+        "show milestones",
+        "what is completed",
+        "what have we completed",
+        "what have we finished",
+        "show completed work",
+        "show achievements",
+        "what progress have we made"
+    ]:
         return "completed_milestones"
 
-    if text.startswith("add task "):
+    if (
+        text.startswith("add task ")
+        or text.startswith("add this to my tasks ")
+        or text.startswith("add this task ")
+        or text.startswith("create task ")
+        or text.startswith("create a task ")
+        or text.startswith("i need to do ")
+        or text.startswith("i have to do ")
+        or text.startswith("i should do ")
+        or text.startswith("remind me to ")
+    ):
         return "add_task"
 
-    if text in ["show tasks", "list tasks", "active tasks"]:
+    if text in [
+        "show tasks",
+        "list tasks",
+        "active tasks",
+        "what are my tasks",
+        "what tasks are pending",
+        "what's pending",
+        "what is pending",
+        "what work is left",
+        "what do i need to do today",
+        "what should i do today",
+        "show my work"
+    ]:
         return "show_tasks"
 
-    if text.startswith("complete task "):
+    if (
+        text.startswith("complete task ")
+        or text.startswith("finish task ")
+        or text.startswith("mark task ")
+        or text.startswith("mark task number ")
+        or text.startswith("i completed task ")
+        or text.startswith("task completed ")
+    ):
         return "complete_task"
 
-    if text in ["show completed tasks", "completed tasks", "list completed tasks"]:
+    if text in [
+        "show completed tasks",
+        "completed tasks",
+        "list completed tasks",
+        "what have i completed",
+        "show finished tasks",
+        "finished tasks"
+    ]:
         return "show_completed_tasks"
+
+    if text in [
+        "current version",
+        "what version are we on",
+        "version",
+        "ag version"
+    ]:
+        return "current_version"
 
     return "unknown"
 
@@ -510,7 +623,19 @@ def process_input(user_input, memory, tasks):
     if intent == "show_completed_tasks":
         return show_completed_tasks(tasks)
 
+    if intent == "current_version":
+        return current_version()
+
     return "AG: " + ask_brain(user_input)
+
+def current_version():
+    project = load_project_context()
+
+    if not project:
+        return "AG: Project context unavailable."
+
+    return f"AG: Current version is {project.get('current_version', 'Unknown')}."
+
 
 
 def main():

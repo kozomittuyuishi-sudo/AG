@@ -1,6 +1,9 @@
 {
-    "active": [],
+    "active": [
+        "finish task phrase expansion"
+    ],
     "completed": [
-        "implement task system"
+        "implement task system",
+        "finish task phrase expansion"
     ]
 }
