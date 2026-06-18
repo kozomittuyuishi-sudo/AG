@@ -1,3 +1,4 @@
+from email.mime import text
 import json
 import os
 import subprocess
@@ -398,7 +399,6 @@ def show_completed_tasks(tasks):
 
     return response
 
-
 def detect_intent(user_input):
     text = user_input.strip().lower().replace("?", "")
 
@@ -408,16 +408,52 @@ def detect_intent(user_input):
     if text.startswith("cloud "):
         return "cloud_brain"
 
-    if text in ["switch to local brain", "use local brain", "local brain"]:
+    if text in [
+        "switch to local brain",
+        "use local brain",
+        "local brain",
+        "go offline",
+        "offline mode",
+        "use offline mode",
+        "use local ai",
+        "work offline",
+        "enable local brain"
+    ]:
         return "set_brain_local"
 
-    if text in ["switch to cloud brain", "use cloud brain", "cloud brain"]:
+    if text in [
+        "switch to cloud brain",
+        "use cloud brain",
+        "cloud brain",
+        "go online",
+        "online mode",
+        "use cloud ai",
+        "enable cloud brain",
+        "work online"
+    ]:
         return "set_brain_cloud"
 
-    if text in ["switch to auto brain", "use auto brain", "auto brain"]:
+    if text in [
+        "switch to auto brain",
+        "use auto brain",
+        "auto brain",
+        "automatic mode",
+        "smart mode",
+        "brain auto mode"
+    ]:
         return "set_brain_auto"
 
-    if text in ["brain status", "current brain", "what brain are you using"]:
+    if text in [
+        "brain status",
+        "current brain",
+        "what brain are you using",
+        "which brain are you using",
+        "which brain is active",
+        "who is answering",
+        "who is responding",
+        "what mode are you in",
+        "current mode"
+    ]:
         return "brain_status"
 
     if text.startswith("remember "):
@@ -473,6 +509,14 @@ def detect_intent(user_input):
         "what project is this"
     ]:
         return "project_name"
+
+    if text in [
+        "current version",
+        "what version are we on",
+        "version",
+        "ag version"
+    ]:
+        return "current_version"
 
     if text in [
         "what is next",
@@ -546,16 +590,7 @@ def detect_intent(user_input):
     ]:
         return "show_completed_tasks"
 
-    if text in [
-        "current version",
-        "what version are we on",
-        "version",
-        "ag version"
-    ]:
-        return "current_version"
-
     return "unknown"
-
 
 def process_input(user_input, memory, tasks):
     intent = detect_intent(user_input)
