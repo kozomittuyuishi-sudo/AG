@@ -1,3 +1,6 @@
+from brain import ask_brain
+
+
 class ExecutiveState:
     def __init__(self):
         self.goal = None
@@ -16,7 +19,7 @@ def clean_category_name(name):
     return name
 
 
-def interpret_storage_decision(user_input, ask_brain):
+def interpret_storage_decision(user_input):
     text = user_input.strip().lower()
 
     quick_store = ["yes", "y", "yeah", "yep", "sure", "store", "save", "save it", "store it", "go ahead", "do it"]
@@ -56,7 +59,7 @@ CLARIFY
     return "CLARIFY"
 
 
-def interpret_category_decision(user_input, memory, ask_brain):
+def interpret_category_decision(user_input, memory):
     text = user_input.strip().lower()
 
     # Numbers are assigned in the same order Ag.py prints the menu,
@@ -101,6 +104,7 @@ Strict rules:
 - Never substitute a related category.
 - If the user mentions a category that does not exist, return CREATE:<that_category>.
 - If the user says "robotics", do NOT choose "vehicles" unless "vehicles" was explicitly mentioned.
+- If the user invents a category name that is not in the existing list, never map it to an existing category. Always CREATE it.
 - Category names must be lowercase with underscores.
 - Do not explain.
 

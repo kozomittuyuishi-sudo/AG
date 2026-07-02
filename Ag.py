@@ -681,7 +681,7 @@ def main():
         user_input = input("You: ")
         cleaned_input = user_input.strip().lower()
         if pending_store:
-            decision = interpret_storage_decision(user_input, ask_brain)
+            decision = interpret_storage_decision(user_input)
 
             if decision == "STORE":
                 pending_store = False
@@ -704,7 +704,7 @@ def main():
             print("AG: I could not tell whether you wanted that stored. Answer clearly, humanity permitting.")
             continue
         if pending_category:
-            category_type, category = interpret_category_decision(user_input, memory, ask_brain)
+            category_type, category = interpret_category_decision(user_input, memory)
 
             if category_type == "NEW":
                 memory[category] = {}
