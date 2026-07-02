@@ -1,11 +1,10 @@
-from email.mime import text
+from executive import interpret_storage_decision, interpret_category_decision
 import json
 import os
 import subprocess
 from datetime import datetime
 
 import dotenv
-import brain
 
 from brain import (
     ask_brain,
@@ -592,9 +591,7 @@ def detect_intent(user_input):
 
     return "unknown"
 
-def process_input(user_input, memory, tasks):
-    intent = detect_intent(user_input)
-
+def process_input(user_input, memory, tasks, intent):
     if intent == "shutdown":
         return "shutdown"
 
@@ -671,8 +668,6 @@ def current_version():
 
     return f"AG: Current version is {project.get('current_version', 'Unknown')}."
 
-
-
 def main():
     memory = load_memory()
     tasks = load_tasks()
@@ -685,84 +680,77 @@ def main():
     while True:
         user_input = input("You: ")
         cleaned_input = user_input.strip().lower()
-
         if pending_store:
-            if cleaned_input in ["yes", "y", "store", "save", "save it", "store it"]:
+            decision = interpret_storage_decision(user_input, ask_brain)
+
+            if decision == "STORE":
                 pending_store = False
                 pending_category = True
 
                 print("AG: Where should I store it?")
-                print("AG: 1. General")
-                print("AG: 2. Projects")
-                print("AG: 3. Vehicles")
-                print("AG: 4. Characters")
-                print("AG: 5. Notes")
-                print("AG: 6. Tasks")
+
+                for index, category in enumerate(memory.keys(), start=1):
+                    print(f"AG: {index}. {category.capitalize()}")
+
+                print("AG: Or name a new division to create one.")
                 continue
 
-            if cleaned_input in ["no", "n", "dont", "don't", "skip"]:
+            if decision == "SKIP":
                 pending_store = False
                 last_brain_answer = None
                 print("AG: Not stored. The cloud shall be bothered again later, apparently.")
                 continue
 
+            print("AG: I could not tell whether you wanted that stored. Answer clearly, humanity permitting.")
+            continue
         if pending_category:
-            category_map = {
-                "1": "general",
-                "general": "general",
-                "2": "projects",
-                "projects": "projects",
-                "3": "vehicles",
-                "vehicles": "vehicles",
-                "4": "characters",
-                "characters": "characters",
-                "5": "notes",
-                "notes": "notes",
-                "6": "tasks",
-                "tasks": "tasks"
-            }
+            category_type, category = interpret_category_decision(user_input, memory, ask_brain)
 
-            if cleaned_input in category_map:
-                category = category_map[cleaned_input]
-
-                summary = generate_memory_summary(
-                    last_brain_answer["question"],
-                    last_brain_answer["answer"]
-                )
-
-                try:
-                    lines = summary.splitlines()
-
-                    key_line = next(
-                        line for line in lines
-                        if line.upper().startswith("KEY:")
-                    )
-
-                    summary_line = next(
-                        line for line in lines
-                        if line.upper().startswith("SUMMARY:")
-                    )
-
-                    key = key_line.split(":", 1)[1].strip().lower()
-                    value = summary_line.split(":", 1)[1].strip()
-
-                except Exception:
-                    key = last_brain_answer["question"].lower().replace("?", "").strip()
-                    value = last_brain_answer["answer"]
-
-                memory[category][key] = value
+            if category_type == "NEW":
+                memory[category] = {}
                 save_memory(memory)
+                print(f"AG: Created new memory division '{category}'.")
 
-                print(f"AG: Stored '{key}' under {category}.")
-
-                pending_category = False
-                last_brain_answer = None
+            elif category_type != "EXISTING":
+                print("AG: I could not identify that memory division. Use a number, category name, or ask me to create one.")
                 continue
 
-            print("AG: Invalid category. Choose 1-6. A number. Humanity has used them before.")
+            summary = generate_memory_summary(
+                last_brain_answer["question"],
+                last_brain_answer["answer"]
+            )
+
+            try:
+                lines = summary.splitlines()
+
+                key_line = next(
+                    line for line in lines
+                    if line.upper().startswith("KEY:")
+                )
+
+                summary_line = next(
+                    line for line in lines
+                    if line.upper().startswith("SUMMARY:")
+                )
+
+                key = key_line.split(":", 1)[1].strip().lower()
+                value = summary_line.split(":", 1)[1].strip()
+
+            except Exception:
+                key = last_brain_answer["question"].lower().replace("?", "").strip()
+                value = last_brain_answer["answer"]
+
+            memory[category][key] = value
+            save_memory(memory)
+
+            print(f"AG: Stored '{key}' under {category}.")
+
+            pending_category = False
+            last_brain_answer = None
             continue
 
-        response = process_input(user_input, memory, tasks)
+        intent = detect_intent(user_input)
+        response = process_input(user_input, memory, tasks, intent)
 
         if response == "shutdown":
             print("AG: Shutting down.")
@@ -770,8 +758,6 @@ def main():
             break
 
         print(response)
-
-        intent = detect_intent(user_input)
 
         if response.startswith("AG: ") and intent in ["unknown", "cloud_brain"]:
             last_brain_answer = {
