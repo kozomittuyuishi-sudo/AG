@@ -73,6 +73,8 @@ def save_brain_mode(mode):
 
 
 def set_brain_mode(mode):
+    mode = mode.strip().lower()
+
     if mode not in ["local", "cloud", "auto"]:
         return "AG: Invalid brain mode. Use local, cloud, or auto."
 
@@ -101,7 +103,12 @@ def ask_cloud_brain(message):
         ],
     )
 
-    return response.choices[0].message.content
+    content = response.choices[0].message.content
+
+    if not content:
+        return "Cloud brain returned no response."
+
+    return content
 
 
 def ask_local(message):
@@ -121,24 +128,23 @@ def ask_brain(message):
     if mode == "local":
         try:
             reply = ask_local(message)
-            print(f"[AG DEBUG] Local Brain Response Time: {time.time()-start:.2f}s")
-            return reply
+            print(f"[AG DEBUG] Local Brain Response Time: {time.time() - start:.2f}s")
+            return reply or "Local brain returned no response."
         except Exception as error:
             return f"Local brain failed: {error}"
 
     if mode == "cloud":
         try:
             reply = ask_cloud_brain(message)
-            print(f"[AG DEBUG] Cloud Brain Response Time: {time.time()-start:.2f}s")
-            return reply
+            print(f"[AG DEBUG] Cloud Brain Response Time: {time.time() - start:.2f}s")
+            return reply or "Cloud brain returned no response."
         except Exception as error:
             return f"Cloud brain failed: {error}"
 
-    # AUTO MODE: local first, cloud fallback
     try:
         reply = ask_local(message)
-        print(f"[AG DEBUG] Local Brain Response Time: {time.time()-start:.2f}s")
-        return reply
+        print(f"[AG DEBUG] Local Brain Response Time: {time.time() - start:.2f}s")
+        return reply or "Local brain returned no response."
 
     except Exception as local_error:
         print(f"[AG DEBUG] Local brain failed: {local_error}")
@@ -146,8 +152,8 @@ def ask_brain(message):
 
         try:
             reply = ask_cloud_brain(message)
-            print(f"[AG DEBUG] Cloud Brain Response Time: {time.time()-start:.2f}s")
-            return reply
+            print(f"[AG DEBUG] Cloud Brain Response Time: {time.time() - start:.2f}s")
+            return reply or "Cloud brain returned no response."
 
         except Exception as cloud_error:
             return (
@@ -162,8 +168,8 @@ def ask_cloud_direct(message):
 
     try:
         reply = ask_cloud_brain(message)
-        print(f"[AG DEBUG] Forced Cloud Brain Response Time: {time.time()-start:.2f}s")
-        return reply
+        print(f"[AG DEBUG] Forced Cloud Brain Response Time: {time.time() - start:.2f}s")
+        return reply or "Cloud brain returned no response."
 
     except Exception as error:
         return f"Forced cloud brain failed: {error}"

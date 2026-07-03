@@ -416,6 +416,16 @@ def show_completed_tasks(tasks):
 
     return response
 
+
+def current_version():
+    project = load_project_context()
+
+    if not project:
+        return "AG: Project context unavailable."
+
+    return f"AG: Current version is {project.get('current_version', 'Unknown')}."
+
+
 def detect_intent(user_input):
     text = user_input.strip().lower().replace("?", "")
 
@@ -476,35 +486,6 @@ def detect_intent(user_input):
     if text.startswith("remember "):
         return "remember"
 
-    if any(
-        text.startswith(prefix)
-        for prefix in [
-            "what is ",
-            "who is ",
-            "do you know about ",
-            "have i told you about ",
-            "what do you remember about ",
-            "search memory for ",
-            "find memory for ",
-            "find in memory ",
-            "search and find memory for ",
-            "search and find ",
-            "find memory about ",
-            "search for ",
-            "find "
-        ]
-    ) or text in ["what am i", "who am i"]:
-        return "recall"
-
-    if text in ["hello", "hi", "hey"]:
-        return "greeting"
-
-    if text in ["show memory", "list memory", "list memories"]:
-        return "show_memory"
-
-    if text in ["open memory file", "open memory", "show memory file"]:
-        return "open_memory_file"
-
     if text in [
         "project status",
         "status",
@@ -559,19 +540,6 @@ def detect_intent(user_input):
     ]:
         return "completed_milestones"
 
-    if (
-        text.startswith("add task ")
-        or text.startswith("add this to my tasks ")
-        or text.startswith("add this task ")
-        or text.startswith("create task ")
-        or text.startswith("create a task ")
-        or text.startswith("i need to do ")
-        or text.startswith("i have to do ")
-        or text.startswith("i should do ")
-        or text.startswith("remind me to ")
-    ):
-        return "add_task"
-
     if text in [
         "show tasks",
         "list tasks",
@@ -587,16 +555,6 @@ def detect_intent(user_input):
     ]:
         return "show_tasks"
 
-    if (
-        text.startswith("complete task ")
-        or text.startswith("finish task ")
-        or text.startswith("mark task ")
-        or text.startswith("mark task number ")
-        or text.startswith("i completed task ")
-        or text.startswith("task completed ")
-    ):
-        return "complete_task"
-
     if text in [
         "show completed tasks",
         "completed tasks",
@@ -607,7 +565,60 @@ def detect_intent(user_input):
     ]:
         return "show_completed_tasks"
 
+    if any(
+        text.startswith(prefix)
+        for prefix in [
+            "what is ",
+            "who is ",
+            "do you know about ",
+            "have i told you about ",
+            "what do you remember about ",
+            "search memory for ",
+            "find memory for ",
+            "find in memory ",
+            "search and find memory for ",
+            "search and find ",
+            "find memory about ",
+            "search for ",
+            "find "
+        ]
+    ) or text in ["what am i", "who am i"]:
+        return "recall"
+
+    if text in ["hello", "hi", "hey"]:
+        return "greeting"
+
+    if text in ["show memory", "list memory", "list memories"]:
+        return "show_memory"
+
+    if text in ["open memory file", "open memory", "show memory file"]:
+        return "open_memory_file"
+
+    if (
+        text.startswith("add task ")
+        or text.startswith("add this to my tasks ")
+        or text.startswith("add this task ")
+        or text.startswith("create task ")
+        or text.startswith("create a task ")
+        or text.startswith("i need to do ")
+        or text.startswith("i have to do ")
+        or text.startswith("i should do ")
+        or text.startswith("remind me to ")
+    ):
+        return "add_task"
+
+    if (
+        text.startswith("complete task ")
+        or text.startswith("finish task ")
+        or text.startswith("mark task ")
+        or text.startswith("mark task number ")
+        or text.startswith("i completed task ")
+        or text.startswith("task completed ")
+    ):
+        return "complete_task"
+
     return "unknown"
+
 
 def process_input(user_input, memory, tasks, intent):
     context = analyze_context(user_input, intent)
@@ -685,13 +696,6 @@ def process_input(user_input, memory, tasks, intent):
 
     return "AG: " + safe_response(ask_brain(user_input))
 
-def current_version():
-    project = load_project_context()
-
-    if not project:
-        return "AG: Project context unavailable."
-
-    return f"AG: Current version is {project.get('current_version', 'Unknown')}."
 
 def store_last_answer(category: str, memory: dict, last_brain_answer: dict) -> None:
     summary = generate_memory_summary(
@@ -799,13 +803,13 @@ def main():
         if pending_new_category_confirmation:
             decision = interpret_storage_decision(user_input)
 
-            if decision == "STORE":
+            if decision == "STORE" and pending_new_category_name:
                 category = pending_new_category_name
                 memory[category] = {}
                 save_memory(memory)
                 print(f"AG: Created new memory division '{category}'.")
 
-                store_last_answer(category, memory, last_brain_answer)
+                store_last_answer(category, memory, last_brain_answer) # type: ignore
 
                 pending_new_category_confirmation = False
                 pending_new_category_name = None
@@ -831,7 +835,7 @@ def main():
             category_type, category = interpret_category_decision(user_input, memory)
 
             if category_type == "NEW":
-                memory[category] = {}
+                memory[category] = {} # type: ignore
                 save_memory(memory)
                 print(f"AG: Created new memory division '{category}'.")
 
@@ -846,7 +850,7 @@ def main():
                 print("AG: I could not identify that memory division. Use a number, category name, or ask me to create one.")
                 continue
 
-            store_last_answer(category, memory, last_brain_answer)
+            store_last_answer(category, memory, last_brain_answer) # type: ignore
 
             pending_category = False
             last_brain_answer = None
@@ -876,8 +880,8 @@ def main():
 
             ask_storage = (
                 plan.get("store_after_response", False)
-                and context["topic_type"] not in skip_topics
-                and (context["likely_storage_value"] or context["topic_type"] in storage_topics)
+                and context.get("topic_type") not in skip_topics
+                and (context.get("likely_storage_value") or context.get("topic_type") in storage_topics)
             )
 
             if ask_storage:
