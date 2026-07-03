@@ -1,3 +1,4 @@
+from typing import Dict, Tuple, Optional, Any
 from brain import ask_brain
 
 
@@ -12,14 +13,14 @@ class ExecutiveState:
         self.update_project = False
 
 
-def clean_category_name(name):
+def clean_category_name(name: str) -> str:
     name = name.strip().lower()
     name = name.replace(" ", "_")
     name = "".join(char for char in name if char.isalnum() or char == "_")
     return name
 
 
-def interpret_storage_decision(user_input):
+def interpret_storage_decision(user_input: str) -> str:
     text = user_input.strip().lower()
 
     quick_store = ["yes", "y", "yeah", "yep", "sure", "store", "save", "save it", "store it", "go ahead", "do it"]
@@ -59,7 +60,7 @@ CLARIFY
     return "CLARIFY"
 
 
-def interpret_category_decision(user_input, memory):
+def interpret_category_decision(user_input: str, memory: Dict[str, Any]) -> Tuple[str, Optional[str]]:
     text = user_input.strip().lower()
 
     # Numbers are assigned in the same order Ag.py prints the menu,
@@ -140,3 +141,32 @@ Response: CREATE:misc if misc does not exist, otherwise USE:misc
             return ("NEW", category)
 
     return ("UNKNOWN", None)
+def create_execution_plan(user_input: str, intent: str) -> Dict[str, Any]:
+    plan: Dict[str, Any] = {
+        "goal": None,
+        "intent": intent,
+        "needs_brain": False,
+        "needs_memory": False,
+        "needs_project_context": False,
+        "needs_clarification": False,
+        "store_after": False,
+        "action": "respond"
+    }
+
+    if intent in ["show_memory", "recall", "remember"]:
+        plan["needs_memory"] = True
+        plan["action"] = "memory_operation"
+
+    elif intent in ["project_status", "project_name", "next_step", "completed_milestones"]:
+        plan["needs_project_context"] = True
+        plan["action"] = "project_operation"
+
+    elif intent in ["add_task", "show_tasks", "complete_task", "show_completed_tasks"]:
+        plan["action"] = "task_operation"
+
+    elif intent in ["unknown", "cloud_brain"]:
+        plan["needs_brain"] = True
+        plan["store_after"] = True
+        plan["action"] = "brain_response"
+
+    return plan
