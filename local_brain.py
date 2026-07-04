@@ -1,7 +1,7 @@
 import subprocess
 
 
-def ask_local_brain(message):
+def ask_local_brain(message) -> str:
     result = subprocess.run(
         ["ollama", "run", "qwen2.5:3b", message],
         capture_output=True,

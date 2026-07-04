@@ -4,6 +4,7 @@ from executive import (
     analyze_context,
     build_execution_plan
 )
+from working_memory import WorkingMemory, update_working_memory, resolve_followup
 import json
 import os
 import subprocess
@@ -743,6 +744,7 @@ def main():
     pending_category = False
     pending_new_category_confirmation = False
     pending_new_category_name = None
+    working_memory = WorkingMemory()
 
     while True:
         user_input = input("You: ")
@@ -803,13 +805,19 @@ def main():
         if pending_new_category_confirmation:
             decision = interpret_storage_decision(user_input)
 
-            if decision == "STORE" and pending_new_category_name:
+            if decision == "STORE":
+                if not pending_new_category_name or not last_brain_answer:
+                    pending_new_category_confirmation = False
+                    pending_new_category_name = None
+                    print("AG: That confirmation no longer has anything to attach to.")
+                    continue
+
                 category = pending_new_category_name
                 memory[category] = {}
                 save_memory(memory)
                 print(f"AG: Created new memory division '{category}'.")
 
-                store_last_answer(category, memory, last_brain_answer) # type: ignore
+                store_last_answer(category, memory, last_brain_answer)
 
                 pending_new_category_confirmation = False
                 pending_new_category_name = None
@@ -834,8 +842,12 @@ def main():
         if pending_category:
             category_type, category = interpret_category_decision(user_input, memory)
 
+            if category is None:
+                print("AG: I could not identify that memory division. Use a number, category name, or ask me to create one.")
+                continue
+
             if category_type == "NEW":
-                memory[category] = {} # type: ignore
+                memory[category] = {}
                 save_memory(memory)
                 print(f"AG: Created new memory division '{category}'.")
 
@@ -846,17 +858,24 @@ def main():
                 print(f"AG: Memory division '{category}' does not exist. Create it?")
                 continue
 
-            elif category_type != "EXISTING":
-                print("AG: I could not identify that memory division. Use a number, category name, or ask me to create one.")
+            pending_category = False
+
+            if not last_brain_answer:
+                print("AG: There is nothing pending to store anymore.")
                 continue
 
-            store_last_answer(category, memory, last_brain_answer) # type: ignore
-
-            pending_category = False
+            store_last_answer(category, memory, last_brain_answer)
             last_brain_answer = None
             continue
 
         intent = detect_intent(user_input)
+
+        if intent == "unknown":
+            resolved_input = resolve_followup(user_input, working_memory)
+            if resolved_input != user_input:
+                user_input = resolved_input
+                intent = detect_intent(user_input)
+
         response = process_input(user_input, memory, tasks, intent)
 
         if response == "shutdown":
@@ -866,22 +885,21 @@ def main():
 
         print(response)
 
+        answer_text = response.replace("AG: ", "", 1) if response.startswith("AG: ") else response
+        update_working_memory(working_memory, user_input, answer_text, intent)
+
         if response.startswith("AG: ") and intent in ["unknown", "cloud_brain"]:
             last_brain_answer = {
                 "question": user_input,
-                "answer": response.replace("AG: ", "", 1)
+                "answer": answer_text
             }
 
             context = analyze_context(user_input, intent)
             plan = build_execution_plan(user_input, intent)
 
-            storage_topics = ["project_planning", "memory_storage", "personal_info", "long_term_decision"]
-            skip_topics = ["casual_greeting", "code_debugging", "confusion"]
-
             ask_storage = (
                 plan.get("store_after_response", False)
-                and context.get("topic_type") not in skip_topics
-                and (context.get("likely_storage_value") or context.get("topic_type") in storage_topics)
+                and context.get("likely_storage_value", False)
             )
 
             if ask_storage:

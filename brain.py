@@ -45,7 +45,7 @@ client = OpenAI(
 )
 
 
-def load_brain_mode():
+def load_brain_mode() -> str:
     if not os.path.exists(BRAIN_CONFIG_FILE):
         save_brain_mode("auto")
         return "auto"
@@ -67,12 +67,12 @@ def load_brain_mode():
         return "auto"
 
 
-def save_brain_mode(mode):
+def save_brain_mode(mode) -> None:
     with open(BRAIN_CONFIG_FILE, "w", encoding="utf-8") as file:
         json.dump({"brain_mode": mode}, file, indent=4)
 
 
-def set_brain_mode(mode):
+def set_brain_mode(mode) -> str:
     mode = mode.strip().lower()
 
     if mode not in ["local", "cloud", "auto"]:
@@ -89,12 +89,12 @@ def set_brain_mode(mode):
     return "AG: Brain mode changed to AUTO. Local first, cloud fallback. Sensible, annoyingly rare."
 
 
-def get_brain_status():
+def get_brain_status() -> str:
     mode = load_brain_mode()
     return f"AG: Current brain mode: {mode.upper()}."
 
 
-def ask_cloud_brain(message):
+def ask_cloud_brain(message) -> str:
     response = client.chat.completions.create(
         model="nex-agi/nex-n2-pro:free",
         messages=[
@@ -111,7 +111,7 @@ def ask_cloud_brain(message):
     return content
 
 
-def ask_local(message):
+def ask_local(message) -> str:
     local_prompt = f"""
 {SYSTEM_PROMPT}
 
@@ -121,7 +121,7 @@ User message:
     return ask_local_brain(local_prompt)
 
 
-def ask_brain(message):
+def ask_brain(message) -> str:
     start = time.time()
     mode = load_brain_mode()
 
@@ -163,7 +163,7 @@ def ask_brain(message):
             )
 
 
-def ask_cloud_direct(message):
+def ask_cloud_direct(message) -> str:
     start = time.time()
 
     try:
