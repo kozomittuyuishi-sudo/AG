@@ -698,12 +698,7 @@ def process_input(user_input, memory, tasks, intent):
     return "AG: " + safe_response(ask_brain(user_input))
 
 
-def store_last_answer(category: str, memory: dict, last_brain_answer: dict) -> None:
-    summary = generate_memory_summary(
-        last_brain_answer["question"],
-        last_brain_answer["answer"]
-    )
-
+def _extract_key_value(summary: str, fallback_key: str, fallback_value: str):
     key = None
     value = None
 
@@ -723,15 +718,45 @@ def store_last_answer(category: str, memory: dict, last_brain_answer: dict) -> N
         pass
 
     if not key:
-        key = last_brain_answer["question"].lower().replace("?", "").strip() or "unnamed_entry"
+        key = fallback_key or "unnamed_entry"
 
     if not value:
-        value = last_brain_answer["answer"]
+        value = fallback_value
+
+    return key, value
+
+
+def store_last_answer(category: str, memory: dict, last_brain_answer: dict) -> None:
+    summary = generate_memory_summary(
+        last_brain_answer["question"],
+        last_brain_answer["answer"]
+    )
+
+    fallback_key = last_brain_answer["question"].lower().replace("?", "").strip() or "unnamed_entry"
+    key, value = _extract_key_value(summary, fallback_key, last_brain_answer["answer"])
 
     memory[category][key] = value
     save_memory(memory)
 
     print(f"AG: Stored '{key}' under {category}.")
+
+
+def store_discussion(category: str, memory: dict, working_memory: WorkingMemory) -> None:
+    topic = working_memory.discussion_topic()
+
+    combined_answer = " ".join(
+        entry["answer"] for entry in working_memory.discussion_buffer if entry.get("answer")
+    ).strip() or "No content captured."
+
+    summary = generate_memory_summary(f"discussion about {topic}", combined_answer)
+
+    fallback_key = topic.strip().lower().replace(" ", "_") or "discussion"
+    key, value = _extract_key_value(summary, fallback_key, combined_answer)
+
+    memory[category][key] = value
+    save_memory(memory)
+
+    print(f"AG: Stored discussion under {category}.")
 
 
 def main():
@@ -740,10 +765,11 @@ def main():
     startup()
 
     last_brain_answer = None
-    pending_store = False
     pending_category = False
     pending_new_category_confirmation = False
     pending_new_category_name = None
+    pending_shutdown_confirmation = False
+    pending_shutdown_category = False
     working_memory = WorkingMemory()
 
     while True:
@@ -751,11 +777,11 @@ def main():
         cleaned_input = user_input.strip().lower()
 
         if cleaned_input == "save last response":
-            if not last_brain_answer:
+            if not working_memory.has_unsaved_discussion():
                 print("AG: There is no recent response to save.")
                 continue
 
-            pending_store = False
+            last_brain_answer = working_memory.discussion_buffer[-1]
             pending_category = True
             print("AG: Where should I store it?")
 
@@ -772,19 +798,20 @@ def main():
 
         if (
             cleaned_input in confirmation_words
-            and not pending_store
             and not pending_category
             and not pending_new_category_confirmation
+            and not pending_shutdown_confirmation
+            and not pending_shutdown_category
         ):
             print("AG: No active decision pending.")
             continue
 
-        if pending_store:
+        if pending_shutdown_confirmation:
             decision = interpret_storage_decision(user_input)
 
             if decision == "STORE":
-                pending_store = False
-                pending_category = True
+                pending_shutdown_confirmation = False
+                pending_shutdown_category = True
 
                 print("AG: Where should I store it?")
 
@@ -795,13 +822,35 @@ def main():
                 continue
 
             if decision == "SKIP":
-                pending_store = False
-                last_brain_answer = None
-                print("AG: Not stored. The cloud shall be bothered again later, apparently.")
-                continue
+                pending_shutdown_confirmation = False
+                working_memory.clear_discussion()
+                print("AG: Discussion discarded.")
+                print("AG: Shutting down.")
+                print("AG: Memory preserved.")
+                break
 
             print("AG: I could not tell whether you wanted that stored. Answer clearly, humanity permitting.")
             continue
+
+        if pending_shutdown_category:
+            category_type, category = interpret_category_decision(user_input, memory)
+
+            if category is None:
+                print("AG: I could not identify that memory division. Use a number, category name, or ask me to create one.")
+                continue
+
+            if category_type in ("NEW", "NEW_PENDING_CONFIRMATION"):
+                memory[category] = {}
+                save_memory(memory)
+                print(f"AG: Created new memory division '{category}'.")
+
+            store_discussion(category, memory, working_memory)
+            working_memory.clear_discussion()
+
+            print("AG: Shutting down.")
+            print("AG: Memory preserved.")
+            break
+
         if pending_new_category_confirmation:
             decision = interpret_storage_decision(user_input)
 
@@ -879,6 +928,12 @@ def main():
         response = process_input(user_input, memory, tasks, intent)
 
         if response == "shutdown":
+            if working_memory.has_unsaved_discussion():
+                topic = working_memory.discussion_topic()
+                pending_shutdown_confirmation = True
+                print(f"AG: I have an unsaved discussion about {topic}. Store it before shutdown?")
+                continue
+
             print("AG: Shutting down.")
             print("AG: Memory preserved.")
             break
@@ -889,22 +944,7 @@ def main():
         update_working_memory(working_memory, user_input, answer_text, intent)
 
         if response.startswith("AG: ") and intent in ["unknown", "cloud_brain"]:
-            last_brain_answer = {
-                "question": user_input,
-                "answer": answer_text
-            }
-
-            context = analyze_context(user_input, intent)
-            plan = build_execution_plan(user_input, intent)
-
-            ask_storage = (
-                plan.get("store_after_response", False)
-                and context.get("likely_storage_value", False)
-            )
-
-            if ask_storage:
-                pending_store = True
-                print("AG: Should I store this for future access?")
+            working_memory.add_to_discussion(user_input, answer_text)
 
 
 if __name__ == "__main__":

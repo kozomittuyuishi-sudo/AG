@@ -64,6 +64,10 @@ class WorkingMemory:
         self.conversation_goal: Optional[str] = None
         self.turn_count: int = 0
 
+        # Session-only discussion buffer. Never written to memory.json
+        # automatically — only flushed there if the user confirms at shutdown.
+        self.discussion_buffer: List[Dict[str, str]] = []
+
     def update(self, user_input: str, ag_response: str, intent: str) -> None:
         self.turn_count += 1
 
@@ -83,6 +87,18 @@ class WorkingMemory:
 
     def reset(self) -> None:
         self.__init__()
+
+    def add_to_discussion(self, user_input: str, ag_response: str) -> None:
+        self.discussion_buffer.append({"question": user_input, "answer": ag_response})
+
+    def has_unsaved_discussion(self) -> bool:
+        return len(self.discussion_buffer) > 0
+
+    def clear_discussion(self) -> None:
+        self.discussion_buffer = []
+
+    def discussion_topic(self) -> str:
+        return self.current_topic or "this discussion"
 
     def to_dict(self) -> Dict[str, Any]:
         return {
