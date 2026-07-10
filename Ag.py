@@ -4,7 +4,9 @@ from executive import (
     analyze_context,
     build_execution_plan
 )
-from working_memory import WorkingMemory, update_working_memory, resolve_followup
+from working_memory import WorkingMemory, update_working_memory, resolve_followup, resolve_thread_reference
+from conversation_manager import analyze_action_pattern
+from analytics_logger import log_event
 import json
 import os
 import subprocess
@@ -15,8 +17,10 @@ import dotenv
 from brain import (
     ask_brain,
     ask_cloud_direct,
+    ask_local,
     set_brain_mode,
-    get_brain_status
+    get_brain_status,
+    load_brain_mode
 )
 
 
@@ -354,6 +358,7 @@ def add_task(user_input, tasks):
 
     tasks["active"].append(task)
     save_tasks(tasks)
+    log_event("task_operation", {"operation": "add_task", "task": task})
 
     return f"AG: Task added. Active tasks: {len(tasks['active'])}."
 
@@ -402,6 +407,7 @@ def complete_task(user_input, tasks):
     task = tasks["active"].pop(task_index)
     tasks["completed"].append(task)
     save_tasks(tasks)
+    log_event("task_operation", {"operation": "complete_task", "task": task})
 
     return f"AG: Task completed: {task}. Progress detected. Rare, but welcome."
 
@@ -737,6 +743,7 @@ def store_last_answer(category: str, memory: dict, last_brain_answer: dict) -> N
 
     memory[category][key] = value
     save_memory(memory)
+    log_event("storage_operation", {"operation": "store_answer", "category": category, "key": key})
 
     print(f"AG: Stored '{key}' under {category}.")
 
@@ -755,6 +762,7 @@ def store_discussion(category: str, memory: dict, working_memory: WorkingMemory)
 
     memory[category][key] = value
     save_memory(memory)
+    log_event("storage_operation", {"operation": "store_discussion", "category": category, "key": key})
 
     print(f"AG: Stored discussion under {category}.")
 
@@ -770,7 +778,9 @@ def main():
     pending_new_category_name = None
     pending_shutdown_confirmation = False
     pending_shutdown_category = False
+    pending_temporary_brain_action = None
     working_memory = WorkingMemory()
+    working_memory.default_brain = load_brain_mode()
 
     while True:
         user_input = input("You: ")
@@ -802,8 +812,51 @@ def main():
             and not pending_new_category_confirmation
             and not pending_shutdown_confirmation
             and not pending_shutdown_category
+            and not pending_temporary_brain_action
         ):
             print("AG: No active decision pending.")
+            continue
+
+        if pending_temporary_brain_action:
+            decision = interpret_storage_decision(user_input)
+
+            if decision == "STORE":
+                action = pending_temporary_brain_action
+                previous_mode = load_brain_mode()
+                working_memory.temporary_brain_active = True
+
+                if action["target"] == "cloud":
+                    reply = safe_response(ask_cloud_direct(action["resolved_query"]))
+                else:
+                    reply = safe_response(ask_local(action["resolved_query"]))
+
+                log_event("temporary_brain_used", {
+                    "target": action["target"],
+                    "resolved_query": action["resolved_query"],
+                    "previous_mode": previous_mode
+                })
+
+                print(f"AG: {reply}")
+                print(f"AG: (Temporary {action['target']} use only — default brain mode remains {previous_mode.upper()}.)")
+
+                # Thread continuity fix: this turn must persist like any other.
+                # intent="cloud_brain" so extract_topic won't fire on the raw
+                # routing command — current_topic is deliberately left untouched.
+                update_working_memory(working_memory, action["resolved_query"], reply, "cloud_brain")
+                working_memory.add_to_discussion(action["resolved_query"], reply)
+
+                working_memory.temporary_brain_active = False
+                working_memory.pending_actions = []
+                pending_temporary_brain_action = None
+                continue
+
+            if decision == "SKIP":
+                working_memory.pending_actions = []
+                pending_temporary_brain_action = None
+                print("AG: Cancelled. Default brain mode unchanged.")
+                continue
+
+            print("AG: Should I proceed with that brain for this request, yes or no?")
             continue
 
         if pending_shutdown_confirmation:
@@ -917,15 +970,49 @@ def main():
             last_brain_answer = None
             continue
 
+        log_event("user_input_received", {"text": user_input})
+        action_result = analyze_action_pattern(user_input, working_memory)
+
+        if action_result["is_action_request"]:
+            action = action_result["actions"][0]
+            log_event("action_pattern_detected", {
+                "action_type": action["action_type"],
+                "operation": action["operation"]
+            })
+
+            if action["operation"] == "set_default_brain":
+                print(set_brain_mode(action["target"]))
+                working_memory.default_brain = action["target"]
+                log_event("brain_mode_changed", {"mode": action["target"]})
+                continue
+
+            if action["operation"] == "temporary_brain_use":
+                pending_temporary_brain_action = action
+                working_memory.pending_actions = [action]
+                scope_label = action["scope"].replace("_", " ")
+                print(f"AG: {action['target'].capitalize()} brain requested for this {scope_label}. Proceed?")
+                continue
+
+        original_input = user_input
         intent = detect_intent(user_input)
+        brain_input = user_input
 
         if intent == "unknown":
             resolved_input = resolve_followup(user_input, working_memory)
-            if resolved_input != user_input:
-                user_input = resolved_input
-                intent = detect_intent(user_input)
+            if resolved_input == user_input:
+                resolved_input = resolve_thread_reference(user_input, working_memory)
 
-        response = process_input(user_input, memory, tasks, intent)
+            if resolved_input != user_input:
+                brain_input = resolved_input
+                intent = detect_intent(brain_input)
+                working_memory.follow_up_depth += 1
+                log_event("topic_continuation_detected", {
+                    "original_input": original_input,
+                    "resolved_input": brain_input,
+                    "topic": working_memory.current_topic
+                })
+
+        response = process_input(brain_input, memory, tasks, intent)
 
         if response == "shutdown":
             if working_memory.has_unsaved_discussion():
@@ -941,10 +1028,19 @@ def main():
         print(response)
 
         answer_text = response.replace("AG: ", "", 1) if response.startswith("AG: ") else response
-        update_working_memory(working_memory, user_input, answer_text, intent)
+        update_working_memory(working_memory, original_input, answer_text, intent)
+
+        if intent in ["unknown", "cloud_brain", "recall"]:
+            if answer_text == BRAIN_FALLBACK:
+                log_event("error", {"input": original_input, "intent": intent})
+            else:
+                log_event("brain_response_completed", {
+                    "intent": intent,
+                    "topic": working_memory.current_topic
+                })
 
         if response.startswith("AG: ") and intent in ["unknown", "cloud_brain"]:
-            working_memory.add_to_discussion(user_input, answer_text)
+            working_memory.add_to_discussion(original_input, answer_text)
 
 
 if __name__ == "__main__":

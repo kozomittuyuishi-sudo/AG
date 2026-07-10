@@ -24,5 +24,9 @@
     "misc": {
         "nullpointerexceptiontroubleshooting": "Addressing a `NullPointerException` by ensuring objects are proper\u001b[6D\u001b[K",
         "smartphone-construction-process": "The process of creating a smartphone involves conceptualization, p\u001b[1D\u001b[K"
+    },
+    "testing": {
+        "gravity": "Gravity is a fundamental force of nature that attracts all bodies \u001b[K",
+        "gravity_explanation": "Gravity is a fundamental force attracting all masses toward each o\u001b[1D\u001b[K"
     }
 }

@@ -1,0 +1,34 @@
+{"timestamp": "2026-07-07T11:48:09.240189+00:00", "event_type": "user_input_received", "payload": {"text": "explain about gravity"}}
+{"timestamp": "2026-07-07T11:48:21.347962+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "about gravity"}}
+{"timestamp": "2026-07-07T11:48:39.209515+00:00", "event_type": "user_input_received", "payload": {"text": "use cloud brain for briefing about all this"}}
+{"timestamp": "2026-07-07T11:48:39.210443+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_routing", "operation": "temporary_brain_use"}}
+{"timestamp": "2026-07-07T11:49:17.778613+00:00", "event_type": "temporary_brain_used", "payload": {"target": "cloud", "resolved_query": "briefing about all this", "previous_mode": "auto"}}
+{"timestamp": "2026-07-08T16:04:20.982083+00:00", "event_type": "user_input_received", "payload": {"text": "d:\\AG\\.venv\\Scripts\\activate"}}
+{"timestamp": "2026-07-08T16:04:33.237671+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": null}}
+{"timestamp": "2026-07-08T16:04:47.444077+00:00", "event_type": "user_input_received", "payload": {"text": "forget about it"}}
+{"timestamp": "2026-07-08T16:04:48.956253+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": null}}
+{"timestamp": "2026-07-08T16:05:20.715196+00:00", "event_type": "user_input_received", "payload": {"text": "explain gravity"}}
+{"timestamp": "2026-07-08T16:05:24.758274+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "gravity"}}
+{"timestamp": "2026-07-08T16:06:08.580046+00:00", "event_type": "user_input_received", "payload": {"text": "Use cloud brain for all this"}}
+{"timestamp": "2026-07-08T16:06:08.580772+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_routing", "operation": "temporary_brain_use"}}
+{"timestamp": "2026-07-08T16:06:18.507557+00:00", "event_type": "temporary_brain_used", "payload": {"target": "cloud", "resolved_query": "all this", "previous_mode": "auto"}}
+{"timestamp": "2026-07-08T16:06:44.086792+00:00", "event_type": "user_input_received", "payload": {"text": "explain the above discussion"}}
+{"timestamp": "2026-07-08T16:06:46.070285+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "the above discussion"}}
+{"timestamp": "2026-07-08T16:07:05.247196+00:00", "event_type": "user_input_received", "payload": {"text": "about gravity explaining!"}}
+{"timestamp": "2026-07-08T16:07:09.437463+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "the above discussion"}}
+{"timestamp": "2026-07-08T16:10:35.170170+00:00", "event_type": "user_input_received", "payload": {"text": "shutdown"}}
+{"timestamp": "2026-07-08T16:10:42.689622+00:00", "event_type": "storage_operation", "payload": {"operation": "store_discussion", "category": "testing", "key": "gravity_explanation"}}
+{"timestamp": "2026-07-09T13:08:45.855596+00:00", "event_type": "user_input_received", "payload": {"text": "explain about gravity"}}
+{"timestamp": "2026-07-09T13:08:59.321546+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "about gravity"}}
+{"timestamp": "2026-07-09T13:09:13.049610+00:00", "event_type": "user_input_received", "payload": {"text": "use cloud brain for briefing!"}}
+{"timestamp": "2026-07-09T13:09:13.050709+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_routing", "operation": "temporary_brain_use"}}
+{"timestamp": "2026-07-09T13:09:19.274716+00:00", "event_type": "temporary_brain_used", "payload": {"target": "cloud", "resolved_query": "briefing!", "previous_mode": "auto"}}
+{"timestamp": "2026-07-09T13:14:53.585259+00:00", "event_type": "user_input_received", "payload": {"text": "explain gravity"}}
+{"timestamp": "2026-07-09T13:14:59.791349+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "gravity"}}
+{"timestamp": "2026-07-09T13:15:25.089327+00:00", "event_type": "user_input_received", "payload": {"text": "use cloud brain for briefing!"}}
+{"timestamp": "2026-07-09T13:15:25.090295+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_routing", "operation": "temporary_brain_use"}}
+{"timestamp": "2026-07-09T13:15:39.269883+00:00", "event_type": "temporary_brain_used", "payload": {"target": "cloud", "resolved_query": "briefing!", "previous_mode": "auto"}}
+{"timestamp": "2026-07-09T13:16:15.546823+00:00", "event_type": "user_input_received", "payload": {"text": "brief the above topic!"}}
+{"timestamp": "2026-07-09T13:16:17.847455+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "gravity"}}
+{"timestamp": "2026-07-09T13:16:41.067250+00:00", "event_type": "user_input_received", "payload": {"text": "shutdown"}}
+{"timestamp": "2026-07-09T13:16:45.778970+00:00", "event_type": "storage_operation", "payload": {"operation": "store_discussion", "category": "testing", "key": "gravity"}}

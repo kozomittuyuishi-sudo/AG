@@ -96,7 +96,7 @@ def get_brain_status() -> str:
 
 def ask_cloud_brain(message) -> str:
     response = client.chat.completions.create(
-        model="nex-agi/nex-n2-pro:free",
+        model="tencent/hy3:free",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": message}

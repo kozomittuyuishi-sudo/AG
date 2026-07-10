@@ -1,4 +1,5 @@
 import re
+import uuid
 from typing import Any, Dict, List, Optional
 
 # ── Deterministic topic extraction (no LLM — Phase A stays simple/fast) ──
@@ -49,6 +50,50 @@ def summarize(ag_response: str, max_len: int = 160) -> str:
     return first_sentence[:max_len].rstrip() + "..."
 
 
+_THREAD_REFERENCE_PHRASES = {
+    "the above discussion": "the current {topic} discussion",
+    "above discussion": "the current {topic} discussion",
+    "previous explanation": "the current {topic} discussion",
+    "all this": "the current {topic} discussion",
+    "same topic": "the current {topic} discussion",
+}
+
+_STANDALONE_REFERENCES = {
+    "continue": "Continue explaining {topic}.",
+    "same topic": "Continue the discussion about {topic}.",
+}
+
+
+def resolve_thread_reference(user_input: str, working_memory: "WorkingMemory") -> str:
+    """
+    Resolves broad thread references ("the above discussion", "continue",
+    "same topic", "all this", "previous explanation") into an explicit
+    mention of the current topic, so the Brain never sees a bare pronoun
+    referring to nothing.
+    """
+    topic = working_memory.current_topic
+
+    if not topic:
+        return user_input
+
+    stripped = user_input.strip().rstrip("?.! ").lower()
+
+    for phrase, template in _STANDALONE_REFERENCES.items():
+        if stripped == phrase:
+            return template.format(topic=topic)
+
+    result = user_input
+    changed = False
+
+    for phrase, template in _THREAD_REFERENCE_PHRASES.items():
+        pattern = re.compile(re.escape(phrase), re.IGNORECASE)
+        if pattern.search(result):
+            result = pattern.sub(template.format(topic=topic), result)
+            changed = True
+
+    return result if changed else user_input
+
+
 class WorkingMemory:
     """
     Session-only context tracker. Never touches memory.json.
@@ -64,6 +109,14 @@ class WorkingMemory:
         self.conversation_goal: Optional[str] = None
         self.turn_count: int = 0
 
+        # Persistent thread metadata (Conversation Manager fix)
+        self.thread_summary: Optional[str] = None
+        self.follow_up_depth: int = 0
+        self.active_thread_id: str = uuid.uuid4().hex[:12]
+        self.pending_actions: List[Dict[str, Any]] = []
+        self.default_brain: Optional[str] = None
+        self.temporary_brain_active: bool = False
+
         # Session-only discussion buffer. Never written to memory.json
         # automatically — only flushed there if the user confirms at shutdown.
         self.discussion_buffer: List[Dict[str, str]] = []
@@ -73,14 +126,24 @@ class WorkingMemory:
 
         if intent in ("unknown", "cloud_brain", "recall"):
             topic = extract_topic(user_input)
-            if topic:
+            if topic and topic != self.current_topic:
                 self.current_topic = topic
+                self.conversation_goal = f"Understand {topic}"
+                self.follow_up_depth = 0
                 if topic not in self.recent_entities:
                     self.recent_entities.append(topic)
                     self.recent_entities = self.recent_entities[-5:]
 
         self.last_user_question = user_input
         self.last_ag_answer_summary = summarize(ag_response) if ag_response else None
+
+        if self.current_topic:
+            self.thread_summary = (
+                f"{self.turn_count} turn(s) about {self.current_topic}: "
+                f"{self.last_ag_answer_summary}"
+            )
+        else:
+            self.thread_summary = self.last_ag_answer_summary
 
         self.active_context.append(user_input)
         self.active_context = self.active_context[-5:]
