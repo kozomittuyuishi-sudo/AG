@@ -8,8 +8,6 @@ import json
 import os
 from datetime import datetime, timezone
 
-from storage_manager import append_event
-
 WAREHOUSE_FILE = os.path.join("data", "warehouse", "events.jsonl")
 
 
@@ -21,7 +19,9 @@ def log_event(event_type: str, payload: dict) -> None:
     }
 
     try:
-        append_event("warehouse_events", event)
+        os.makedirs(os.path.dirname(WAREHOUSE_FILE), exist_ok=True)
+        with open(WAREHOUSE_FILE, "a", encoding="utf-8") as file:
+            file.write(json.dumps(event) + "\n")
     except Exception:
         pass
 
