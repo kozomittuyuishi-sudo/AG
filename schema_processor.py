@@ -6,18 +6,41 @@ Transforms raw dictionaries into canonical AG documents:
     Raw document -> normalize aliases -> add metadata -> validate -> canonical document
 
 This module does NOT write files and is NOT a database. It's a pure
-in-memory transformation/validation layer that Storage Manager will
-consume later (not wired together yet, per Phase A scope).
+in-memory transformation/validation layer that Storage Manager consumes.
+
+This is one cohesive subsystem and stays as a single runtime file
+(see the architecture note at the bottom of this docstring). It is
+organized internally into 9 clearly marked sections:
+
+  1. Custom exceptions
+  2. Common metadata constants and helpers
+  3. Canonical schema definitions
+  4. Schema registry
+  5. Alias normalization
+  6. Validation helpers
+  7. Metadata generation
+  8. Version checks
+  9. Public API
 
 Python standard library only. Deterministic. No LLM calls.
+
+---
+Architecture note: split into a package (schema_registry.py,
+schema_validator.py, etc.) only if one of these becomes true:
+  - this file exceeds roughly 700-1000 meaningful lines
+  - schema migration becomes a substantial subsystem
+  - schema definitions become independently maintained
+  - the single file becomes genuinely hard to understand or test
+Until then: one cohesive subsystem = one runtime file.
 """
 
 import uuid
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
+
 # ======================================================================
-# Custom exceptions
+# 1. Custom exceptions
 # ======================================================================
 
 
@@ -63,7 +86,7 @@ class SchemaConflictError(SchemaProcessorError):
 
 
 # ======================================================================
-# Type markers used inside schema "required"/"optional" dtype slots
+# 2. Common metadata constants and helpers
 # ======================================================================
 
 LIST_OF_STR = "list[str]"
@@ -71,8 +94,27 @@ ANY_TYPE = "any"
 METADATA_FIELDS = {"id", "type", "schema_version", "created_at", "updated_at", "extensions"}
 
 
+def _is_valid_iso8601(value: Any) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        datetime.fromisoformat(value.replace("Z", "+00:00"))
+        return True
+    except Exception:
+        return False
+
+
 # ======================================================================
-# Schema registry — one dict entry per document type, no if/elif chain
+# 3. Canonical schema definitions
+#
+# Each document type below defines: canonical type name, id prefix,
+# required fields, optional fields (with expected datatypes), alias
+# mapping, default values, and the current schema version.
+# ======================================================================
+
+
+# ======================================================================
+# 4. Schema registry — one dict entry per document type, no if/elif chain
 # ======================================================================
 
 SCHEMA_REGISTRY: Dict[str, Dict[str, Any]] = {
@@ -210,89 +252,7 @@ SCHEMA_REGISTRY: Dict[str, Dict[str, Any]] = {
 
 
 # ======================================================================
-# Public API
-# ======================================================================
-
-
-def get_schema(document_type: str) -> Dict[str, Any]:
-    schema = SCHEMA_REGISTRY.get(document_type)
-    if schema is None:
-        raise UnknownSchemaError(document_type)
-    return schema
-
-
-def normalize_document(document_type: str, document: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(document, dict):
-        raise SchemaProcessorError(
-            f"[{document_type}] Expected a dict, got {type(document).__name__}."
-        )
-
-    schema = get_schema(document_type)
-
-    doc = _normalize_aliases(document_type, document, schema)
-    doc = _apply_defaults(doc, schema)
-    doc = _apply_metadata(doc, schema)
-    doc = _move_unknown_fields_to_extensions(doc, schema)
-
-    return doc
-
-
-def validate_document(document_type: str, document: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(document, dict):
-        raise SchemaProcessorError(
-            f"[{document_type}] Expected a dict, got {type(document).__name__}."
-        )
-
-    schema = get_schema(document_type)
-
-    doc_id = document.get("id")
-    if not isinstance(doc_id, str) or not doc_id.strip():
-        raise SchemaValidationError(document_type, "id", "non-empty str", doc_id)
-
-    version = document.get("schema_version")
-    if version != schema["version"]:
-        raise SchemaValidationError(document_type, "schema_version", schema["version"], version)
-
-    for field_name, dtype in schema["required"].items():
-        if field_name not in document:
-            raise SchemaValidationError(document_type, field_name, dtype, "<missing>")
-
-    all_fields = {**schema["required"], **schema["optional"]}
-    for field_name, dtype in all_fields.items():
-        if field_name in document:
-            _check_field_type(document_type, field_name, document[field_name], dtype)
-
-    _validate_bounded_float(document_type, document, "confidence")
-    _validate_bounded_float(document_type, document, "importance")
-
-    if document_type == "probe_report" and document.get("risk_level") not in ("low", "medium", "high"):
-        raise SchemaValidationError(
-            document_type, "risk_level", "one of: low, medium, high", document.get("risk_level")
-        )
-
-    if document_type == "task" and "status" in document:
-        allowed = {"pending", "active", "completed", "cancelled"}
-        if document["status"] not in allowed:
-            raise SchemaValidationError(document_type, "status", f"one of: {sorted(allowed)}", document["status"])
-
-    return document
-
-
-def process_document(document_type: str, document: Dict[str, Any]) -> Dict[str, Any]:
-    if not isinstance(document, dict):
-        raise SchemaProcessorError(
-            f"[{document_type}] Expected a dict, got {type(document).__name__}."
-        )
-
-    get_schema(document_type)  # raises UnknownSchemaError early for bad types
-
-    normalized = normalize_document(document_type, document)
-    validated = validate_document(document_type, normalized)
-    return validated
-
-
-# ======================================================================
-# Internal helpers
+# 5. Alias normalization
 # ======================================================================
 
 
@@ -325,57 +285,9 @@ def _normalize_aliases(document_type: str, document: Dict[str, Any], schema: Dic
     return doc
 
 
-def _apply_defaults(document: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
-    doc = dict(document)
-    for field_name, default_factory in schema["defaults"].items():
-        if field_name not in doc:
-            doc[field_name] = default_factory()
-    return doc
-
-
-def _is_valid_iso8601(value: Any) -> bool:
-    if not isinstance(value, str):
-        return False
-    try:
-        datetime.fromisoformat(value.replace("Z", "+00:00"))
-        return True
-    except Exception:
-        return False
-
-
-def _apply_metadata(document: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
-    doc = dict(document)
-    now = datetime.now(timezone.utc).isoformat()
-
-    existing_id = doc.get("id")
-    doc["id"] = existing_id if isinstance(existing_id, str) and existing_id.strip() else f"{schema['id_prefix']}_{uuid.uuid4().hex[:12]}"
-
-    doc["type"] = schema["type"]
-
-    existing_version = doc.get("schema_version")
-    doc["schema_version"] = existing_version if isinstance(existing_version, int) and not isinstance(existing_version, bool) else schema["version"]
-
-    existing_created = doc.get("created_at")
-    doc["created_at"] = existing_created if _is_valid_iso8601(existing_created) else now
-
-    doc["updated_at"] = now
-
-    return doc
-
-
-def _move_unknown_fields_to_extensions(document: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
-    doc = dict(document)
-    known_fields = set(schema["required"].keys()) | set(schema["optional"].keys()) | METADATA_FIELDS
-
-    extensions = doc.get("extensions")
-    extensions = dict(extensions) if isinstance(extensions, dict) else {}
-
-    for key in list(doc.keys()):
-        if key not in known_fields and key != "extensions":
-            extensions[key] = doc.pop(key)
-
-    doc["extensions"] = extensions
-    return doc
+# ======================================================================
+# 6. Validation helpers
+# ======================================================================
 
 
 def _check_field_type(document_type: str, field_name: str, value: Any, dtype: Any) -> None:
@@ -421,3 +333,147 @@ def _validate_bounded_float(document_type: str, document: Dict[str, Any], field_
 
     if not is_number or not (0.0 <= float(value) <= 1.0):
         raise SchemaValidationError(document_type, field_name, "float between 0.0 and 1.0", value)
+
+
+def _validate_enum_fields(document_type: str, document: Dict[str, Any]) -> None:
+    """Document-type-specific enum checks that go beyond plain datatype checks."""
+    if document_type == "probe_report" and document.get("risk_level") not in ("low", "medium", "high"):
+        raise SchemaValidationError(
+            document_type, "risk_level", "one of: low, medium, high", document.get("risk_level")
+        )
+
+    if document_type == "task" and "status" in document:
+        allowed = {"pending", "active", "completed", "cancelled"}
+        if document["status"] not in allowed:
+            raise SchemaValidationError(document_type, "status", f"one of: {sorted(allowed)}", document["status"])
+
+
+# ======================================================================
+# 7. Metadata generation
+# ======================================================================
+
+
+def _apply_defaults(document: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
+    doc = dict(document)
+    for field_name, default_factory in schema["defaults"].items():
+        if field_name not in doc:
+            doc[field_name] = default_factory()
+    return doc
+
+
+def _apply_metadata(document: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
+    doc = dict(document)
+    now = datetime.now(timezone.utc).isoformat()
+
+    existing_id = doc.get("id")
+    doc["id"] = existing_id if isinstance(existing_id, str) and existing_id.strip() else f"{schema['id_prefix']}_{uuid.uuid4().hex[:12]}"
+
+    doc["type"] = schema["type"]
+
+    existing_version = doc.get("schema_version")
+    doc["schema_version"] = existing_version if isinstance(existing_version, int) and not isinstance(existing_version, bool) else schema["version"]
+
+    existing_created = doc.get("created_at")
+    doc["created_at"] = existing_created if _is_valid_iso8601(existing_created) else now
+
+    doc["updated_at"] = now
+
+    return doc
+
+
+def _move_unknown_fields_to_extensions(document: Dict[str, Any], schema: Dict[str, Any]) -> Dict[str, Any]:
+    doc = dict(document)
+    known_fields = set(schema["required"].keys()) | set(schema["optional"].keys()) | METADATA_FIELDS
+
+    extensions = doc.get("extensions")
+    extensions = dict(extensions) if isinstance(extensions, dict) else {}
+
+    for key in list(doc.keys()):
+        if key not in known_fields and key != "extensions":
+            extensions[key] = doc.pop(key)
+
+    doc["extensions"] = extensions
+    return doc
+
+
+# ======================================================================
+# 8. Version checks
+# ======================================================================
+
+
+def _check_schema_version(document_type: str, document: Dict[str, Any], schema: Dict[str, Any]) -> None:
+    """No migrations yet (Phase A) - the only supported version is the schema's current version."""
+    version = document.get("schema_version")
+    if version != schema["version"]:
+        raise SchemaValidationError(document_type, "schema_version", schema["version"], version)
+
+
+# ======================================================================
+# 9. Public API
+# ======================================================================
+
+
+def get_schema(document_type: str) -> Dict[str, Any]:
+    schema = SCHEMA_REGISTRY.get(document_type)
+    if schema is None:
+        raise UnknownSchemaError(document_type)
+    return schema
+
+
+def normalize_document(document_type: str, document: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(document, dict):
+        raise SchemaProcessorError(
+            f"[{document_type}] Expected a dict, got {type(document).__name__}."
+        )
+
+    schema = get_schema(document_type)
+
+    doc = _normalize_aliases(document_type, document, schema)
+    doc = _apply_defaults(doc, schema)
+    doc = _apply_metadata(doc, schema)
+    doc = _move_unknown_fields_to_extensions(doc, schema)
+
+    return doc
+
+
+def validate_document(document_type: str, document: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(document, dict):
+        raise SchemaProcessorError(
+            f"[{document_type}] Expected a dict, got {type(document).__name__}."
+        )
+
+    schema = get_schema(document_type)
+
+    doc_id = document.get("id")
+    if not isinstance(doc_id, str) or not doc_id.strip():
+        raise SchemaValidationError(document_type, "id", "non-empty str", doc_id)
+
+    _check_schema_version(document_type, document, schema)
+
+    for field_name, dtype in schema["required"].items():
+        if field_name not in document:
+            raise SchemaValidationError(document_type, field_name, dtype, "<missing>")
+
+    all_fields = {**schema["required"], **schema["optional"]}
+    for field_name, dtype in all_fields.items():
+        if field_name in document:
+            _check_field_type(document_type, field_name, document[field_name], dtype)
+
+    _validate_bounded_float(document_type, document, "confidence")
+    _validate_bounded_float(document_type, document, "importance")
+    _validate_enum_fields(document_type, document)
+
+    return document
+
+
+def process_document(document_type: str, document: Dict[str, Any]) -> Dict[str, Any]:
+    if not isinstance(document, dict):
+        raise SchemaProcessorError(
+            f"[{document_type}] Expected a dict, got {type(document).__name__}."
+        )
+
+    get_schema(document_type)  # raises UnknownSchemaError early for bad types
+
+    normalized = normalize_document(document_type, document)
+    validated = validate_document(document_type, normalized)
+    return validated
