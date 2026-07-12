@@ -1,0 +1,18 @@
+{
+    "permissions": {
+        "brain.local.use": {"allowed": true, "requires_confirmation": false, "sensitivity": "low"},
+        "brain.cloud.use": {"allowed": true, "requires_confirmation": true, "sensitivity": "medium"},
+        "internet.access": {"allowed": true, "requires_confirmation": false, "sensitivity": "low"},
+        "memory.read": {"allowed": true, "requires_confirmation": false, "sensitivity": "low"},
+        "memory.write": {"allowed": true, "requires_confirmation": false, "sensitivity": "low"},
+        "files.read": {"allowed": true, "requires_confirmation": false, "sensitivity": "medium"},
+        "files.write": {"allowed": true, "requires_confirmation": true, "sensitivity": "medium"},
+        "files.delete": {"allowed": true, "requires_confirmation": true, "sensitivity": "high"},
+        "camera.read": {"allowed": false, "requires_confirmation": true, "sensitivity": "high"},
+        "microphone.read": {"allowed": false, "requires_confirmation": true, "sensitivity": "high"},
+        "screen_activity.read": {"allowed": false, "requires_confirmation": true, "sensitivity": "high"},
+        "sensor.read": {"allowed": false, "requires_confirmation": true, "sensitivity": "medium"},
+        "automation.execute": {"allowed": false, "requires_confirmation": true, "sensitivity": "high"},
+        "system.shutdown": {"allowed": true, "requires_confirmation": true, "sensitivity": "high"}
+    }
+}

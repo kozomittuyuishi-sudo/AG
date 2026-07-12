@@ -1,0 +1,24 @@
+{
+    "brains": [
+        {
+            "id": "ollama_qwen2_5_3b",
+            "aliases": ["local", "offline", "qwen", "ollama"],
+            "provider": "local",
+            "model": "qwen2.5:3b",
+            "capabilities": ["general_reasoning", "fast_response", "offline"],
+            "requires_network": false,
+            "priority": 1,
+            "enabled": true
+        },
+        {
+            "id": "openrouter_nex_n2_pro",
+            "aliases": ["cloud", "online", "nex", "nex-n2"],
+            "provider": "cloud",
+            "model": "nex-agi/nex-n2-pro:free",
+            "capabilities": ["general_reasoning", "deep_reasoning", "large_context"],
+            "requires_network": true,
+            "priority": 2,
+            "enabled": true
+        }
+    ]
+}
