@@ -6,4 +6,5 @@ __pycache__/
 memory.json
 project_context.json
 tasks.json
-logs.txt
+logs.txt.vscode/
+.idea/
