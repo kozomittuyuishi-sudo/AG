@@ -1,219 +1,282 @@
-import re
-import uuid
+"""
+working_memory.py
+=================
+AG Working Memory (Phase A)
+
+Role:
+- Ephemeral, in-memory cognitive workspace ("RAM") for AG.
+- Tracks active session objectives, current tasks, conversation references,
+  temporary facts, reasoning scratchpad notes, decision cache, and pending states.
+- Assembles unified context for the future Cognitive Engine via `build_context()`.
+
+Boundaries:
+- MUST NOT write to persistent storage files (e.g., memory.json, tasks.json).
+- MUST NOT execute simulations, authorization checks, or direct LLM calls.
+- Clears automatically upon reset or expiration.
+"""
+
+from copy import deepcopy
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
-
-# ── Deterministic topic extraction (no LLM — Phase A stays simple/fast) ──
-
-_TOPIC_PATTERNS = [
-    r"^what is (.+)$",
-    r"^what are (.+)$",
-    r"^who is (.+)$",
-    r"^explain (.+)$",
-    r"^define (.+)$",
-    r"^how does (.+) work$",
-    r"^why does (.+) happen$",
-    r"^tell me about (.+)$",
-]
-
-_FOLLOWUP_TRIGGERS = [
-    "how does it work", "how does that work", "how does this work",
-    "explain that", "explain it", "explain this",
-    "give examples", "give an example", "give some examples",
-    "why does it happen", "why does that happen", "why does this happen",
-    "tell me more", "more about it", "what about it",
-    "how is it used", "how is that used",
-]
-
-_PRONOUNS = ("it", "that", "this")
-
-
-def extract_topic(user_input: str) -> Optional[str]:
-    text = user_input.strip().lower().rstrip("?").strip()
-
-    for pattern in _TOPIC_PATTERNS:
-        match = re.match(pattern, text)
-        if match:
-            topic = match.group(1).strip()
-            if topic:
-                return topic
-
-    return None
-
-
-def summarize(ag_response: str, max_len: int = 160) -> str:
-    text = ag_response.strip()
-    first_sentence = re.split(r"(?<=[.!?])\s", text, maxsplit=1)[0]
-
-    if len(first_sentence) <= max_len:
-        return first_sentence
-
-    return first_sentence[:max_len].rstrip() + "..."
-
-
-_THREAD_REFERENCE_PHRASES = {
-    "the above discussion": "the current {topic} discussion",
-    "above discussion": "the current {topic} discussion",
-    "previous explanation": "the current {topic} discussion",
-    "all this": "the current {topic} discussion",
-    "same topic": "the current {topic} discussion",
-}
-
-_STANDALONE_REFERENCES = {
-    "continue": "Continue explaining {topic}.",
-    "same topic": "Continue the discussion about {topic}.",
-}
-
-
-def resolve_thread_reference(user_input: str, working_memory: "WorkingMemory") -> str:
-    """
-    Resolves broad thread references ("the above discussion", "continue",
-    "same topic", "all this", "previous explanation") into an explicit
-    mention of the current topic, so the Brain never sees a bare pronoun
-    referring to nothing.
-    """
-    topic = working_memory.current_topic
-
-    if not topic:
-        return user_input
-
-    stripped = user_input.strip().rstrip("?.! ").lower()
-
-    for phrase, template in _STANDALONE_REFERENCES.items():
-        if stripped == phrase:
-            return template.format(topic=topic)
-
-    result = user_input
-    changed = False
-
-    for phrase, template in _THREAD_REFERENCE_PHRASES.items():
-        pattern = re.compile(re.escape(phrase), re.IGNORECASE)
-        if pattern.search(result):
-            result = pattern.sub(template.format(topic=topic), result)
-            changed = True
-
-    return result if changed else user_input
+import uuid
 
 
 class WorkingMemory:
-    """
-    Session-only context tracker. Never touches memory.json.
-    Resets automatically whenever AG restarts (it's just an object in RAM).
-    """
+    """Ephemeral cognitive RAM for AG session execution."""
 
-    def __init__(self):
-        self.current_topic: Optional[str] = None
-        self.last_user_question: Optional[str] = None
-        self.last_ag_answer_summary: Optional[str] = None
-        self.active_context: List[str] = []
-        self.recent_entities: List[str] = []
-        self.conversation_goal: Optional[str] = None
-        self.turn_count: int = 0
+    def __init__(self, session_id: Optional[str] = None, ttl_seconds: Optional[int] = 3600):
+        """
+        Initialize Working Memory session.
+        
+        :param session_id: Unique string ID for session. Auto-generated if None.
+        :param ttl_seconds: Seconds until session expires. None for no expiry.
+        """
+        self._init_state(session_id=session_id, ttl_seconds=ttl_seconds)
 
-        # Persistent thread metadata (Conversation Manager fix)
-        self.thread_summary: Optional[str] = None
-        self.follow_up_depth: int = 0
-        self.active_thread_id: str = uuid.uuid4().hex[:12]
-        self.pending_actions: List[Dict[str, Any]] = []
-        self.default_brain: Optional[str] = None
-        self.temporary_brain_active: bool = False
+    def _init_state(self, session_id: Optional[str] = None, ttl_seconds: Optional[int] = 3600) -> None:
+        now = datetime.now(timezone.utc)
+        expires_at = (now + timedelta(seconds=ttl_seconds)) if ttl_seconds is not None else None
 
-        # Session-only discussion buffer. Never written to memory.json
-        # automatically — only flushed there if the user confirms at shutdown.
-        self.discussion_buffer: List[Dict[str, str]] = []
-
-    def update(self, user_input: str, ag_response: str, intent: str) -> None:
-        self.turn_count += 1
-
-        if intent in ("unknown", "cloud_brain", "recall"):
-            topic = extract_topic(user_input)
-            if topic and topic != self.current_topic:
-                self.current_topic = topic
-                self.conversation_goal = f"Understand {topic}"
-                self.follow_up_depth = 0
-                if topic not in self.recent_entities:
-                    self.recent_entities.append(topic)
-                    self.recent_entities = self.recent_entities[-5:]
-
-        self.last_user_question = user_input
-        self.last_ag_answer_summary = summarize(ag_response) if ag_response else None
-
-        if self.current_topic:
-            self.thread_summary = (
-                f"{self.turn_count} turn(s) about {self.current_topic}: "
-                f"{self.last_ag_answer_summary}"
-            )
-        else:
-            self.thread_summary = self.last_ag_answer_summary
-
-        self.active_context.append(user_input)
-        self.active_context = self.active_context[-5:]
-
-    def reset(self) -> None:
-        self.__init__()
-
-    def add_to_discussion(self, user_input: str, ag_response: str) -> None:
-        self.discussion_buffer.append({"question": user_input, "answer": ag_response})
-
-    def has_unsaved_discussion(self) -> bool:
-        return len(self.discussion_buffer) > 0
-
-    def clear_discussion(self) -> None:
-        self.discussion_buffer = []
-
-    def discussion_topic(self) -> str:
-        return self.current_topic or "this discussion"
-
-    def to_dict(self) -> Dict[str, Any]:
-        return {
-            "current_topic": self.current_topic,
-            "last_user_question": self.last_user_question,
-            "last_ag_answer_summary": self.last_ag_answer_summary,
-            "active_context": list(self.active_context),
-            "recent_entities": list(self.recent_entities),
-            "conversation_goal": self.conversation_goal,
-            "turn_count": self.turn_count,
+        self._state: Dict[str, Any] = {
+            "session_id": session_id or f"wm_sess_{uuid.uuid4().hex[:10]}",
+            "created_at": now.isoformat(),
+            "updated_at": now.isoformat(),
+            "current_objective": None,
+            "current_task": None,
+            "current_topic": None,
+            "conversation_reference": {},
+            "temporary_context": {},
+            "retrieved_memories": [],
+            "temporary_facts": {},
+            "reasoning_scratchpad": [],
+            "pending_questions": [],
+            "pending_confirmation": None,
+            "pending_action": None,
+            "decision_cache": {},
+            "expires_at": expires_at.isoformat() if expires_at else None
         }
 
+    def _touch(self) -> None:
+        """Update last modified timestamp."""
+        self._state["updated_at"] = datetime.now(timezone.utc).isoformat()
 
-def update_working_memory(working_memory: WorkingMemory, user_input: str, ag_response: str, intent: str) -> None:
-    """Module-level convenience wrapper around WorkingMemory.update()."""
-    working_memory.update(user_input, ag_response, intent)
+    # ------------------------------------------------------------------
+    # Session Management & Expiry
+    # ------------------------------------------------------------------
+
+    def create_session(self, session_id: Optional[str] = None, ttl_seconds: Optional[int] = 3600) -> Dict[str, Any]:
+        """Reset and create a fresh session."""
+        self._init_state(session_id=session_id, ttl_seconds=ttl_seconds)
+        return self.to_document()
+
+    def reset(self) -> None:
+        """Completely reset Working Memory state."""
+        self._init_state(session_id=self._state.get("session_id"), ttl_seconds=3600)
+
+    def is_expired(self) -> bool:
+        """Check if current session is past its expiration time."""
+        exp_str = self._state.get("expires_at")
+        if not exp_str:
+            return False
+        expires_at = datetime.fromisoformat(exp_str)
+        return datetime.now(timezone.utc) >= expires_at
+
+    def clear_expired(self) -> bool:
+        """If session is expired, reset state and return True. Otherwise return False."""
+        if self.is_expired():
+            self.reset()
+            return True
+        return False
+
+    # ------------------------------------------------------------------
+    # Objective, Task & Topic Tracking
+    # ------------------------------------------------------------------
+
+    def set_objective(self, objective: Optional[str]) -> None:
+        self._state["current_objective"] = objective
+        self._touch()
+
+    def get_objective(self) -> Optional[str]:
+        return self._state.get("current_objective")
+
+    def set_current_task(self, task: Optional[str]) -> None:
+        self._state["current_task"] = task
+        self._touch()
+
+    def get_current_task(self) -> Optional[str]:
+        return self._state.get("current_task")
+
+    def set_topic(self, topic: Optional[str]) -> None:
+        self._state["current_topic"] = topic
+        self._touch()
+
+    def get_topic(self) -> Optional[str]:
+        return self._state.get("current_topic")
+
+    # ------------------------------------------------------------------
+    # Conversation Reference Tracking
+    # ------------------------------------------------------------------
+
+    def update_conversation_reference(self, ref_dict: Dict[str, Any]) -> None:
+        """Sync resolved reference data from Conversation Manager."""
+        if isinstance(ref_dict, dict):
+            self._state["conversation_reference"].update(deepcopy(ref_dict))
+            self._touch()
+
+    def get_conversation_reference(self) -> Dict[str, Any]:
+        return deepcopy(self._state.get("conversation_reference", {}))
+
+    # ------------------------------------------------------------------
+    # Temporary Facts & Context
+    # ------------------------------------------------------------------
+
+    def add_fact(self, key: str, value: Any) -> None:
+        """Add temporary fact into working memory."""
+        self._state["temporary_facts"][key] = deepcopy(value)
+        self._touch()
+
+    def get_fact(self, key: str, default: Any = None) -> Any:
+        return deepcopy(self._state["temporary_facts"].get(key, default))
+
+    def remove_fact(self, key: str) -> bool:
+        if key in self._state["temporary_facts"]:
+            del self._state["temporary_facts"][key]
+            self._touch()
+            return True
+        return False
+
+    def get_all_facts(self) -> Dict[str, Any]:
+        return deepcopy(self._state["temporary_facts"])
+
+    # ------------------------------------------------------------------
+    # Retrieved Memories Cache
+    # ------------------------------------------------------------------
+
+    def cache_memory(self, doc: Any) -> None:
+        """Cache retrieved document/memory in-RAM for session lifetime."""
+        if doc is not None:
+            self._state["retrieved_memories"].append(deepcopy(doc))
+            self._touch()
+
+    def get_cached_memories(self) -> List[Any]:
+        return deepcopy(self._state["retrieved_memories"])
+
+    def clear_cached_memories(self) -> None:
+        self._state["retrieved_memories"] = []
+        self._touch()
+
+    # ------------------------------------------------------------------
+    # Reasoning Scratchpad
+    # ------------------------------------------------------------------
+
+    def add_reasoning_note(self, note: str) -> None:
+        """Record intermediate reasoning note or assumption."""
+        if note and isinstance(note, str):
+            entry = {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "note": note
+            }
+            self._state["reasoning_scratchpad"].append(entry)
+            self._touch()
+
+    def get_reasoning_notes(self) -> List[Dict[str, str]]:
+        return deepcopy(self._state["reasoning_scratchpad"])
+
+    def clear_reasoning(self) -> None:
+        self._state["reasoning_scratchpad"] = []
+        self._touch()
+
+    # ------------------------------------------------------------------
+    # Pending States
+    # ------------------------------------------------------------------
+
+    def add_pending_question(self, question: str) -> None:
+        if question and question not in self._state["pending_questions"]:
+            self._state["pending_questions"].append(question)
+            self._touch()
+
+    def get_pending_questions(self) -> List[str]:
+        return deepcopy(self._state["pending_questions"])
+
+    def clear_pending_questions(self) -> None:
+        self._state["pending_questions"] = []
+        self._touch()
+
+    def set_pending_confirmation(self, conf: Optional[Dict[str, Any]]) -> None:
+        self._state["pending_confirmation"] = deepcopy(conf)
+        self._touch()
+
+    def get_pending_confirmation(self) -> Optional[Dict[str, Any]]:
+        return deepcopy(self._state["pending_confirmation"])
+
+    def clear_pending_confirmation(self) -> None:
+        self._state["pending_confirmation"] = None
+        self._touch()
+
+    def set_pending_action(self, action: Optional[Dict[str, Any]]) -> None:
+        self._state["pending_action"] = deepcopy(action)
+        self._touch()
+
+    def get_pending_action(self) -> Optional[Dict[str, Any]]:
+        return deepcopy(self._state["pending_action"])
+
+    def clear_pending_action(self) -> None:
+        self._state["pending_action"] = None
+        self._touch()
+
+    # ------------------------------------------------------------------
+    # Decision Cache
+    # ------------------------------------------------------------------
+
+    def cache_decision(self, key: str, value: Any) -> None:
+        """Cache session decision (e.g. selected brain, resolved route)."""
+        self._state["decision_cache"][key] = deepcopy(value)
+        self._touch()
+
+    def get_cached_decision(self, key: str, default: Any = None) -> Any:
+        return deepcopy(self._state["decision_cache"].get(key, default))
+
+    def clear_decision_cache(self) -> None:
+        self._state["decision_cache"] = {}
+        self._touch()
+
+    # ------------------------------------------------------------------
+    # Context Builder & Document Conversion
+    # ------------------------------------------------------------------
+
+    def build_context(self) -> Dict[str, Any]:
+        """
+        Build unified temporary Context snapshot for the Cognitive Engine.
+        Returns a single zero-copy-safe dictionary representation.
+        """
+        self.clear_expired()
+        return {
+            "session_id": self._state["session_id"],
+            "active_objective": self._state["current_objective"],
+            "active_task": self._state["current_task"],
+            "active_topic": self._state["current_topic"],
+            "conversation_reference": deepcopy(self._state["conversation_reference"]),
+            "temporary_facts": deepcopy(self._state["temporary_facts"]),
+            "cached_memories": deepcopy(self._state["retrieved_memories"]),
+            "scratchpad": deepcopy(self._state["reasoning_scratchpad"]),
+            "pending_questions": deepcopy(self._state["pending_questions"]),
+            "pending_confirmation": deepcopy(self._state["pending_confirmation"]),
+            "pending_action": deepcopy(self._state["pending_action"]),
+            "decisions": deepcopy(self._state["decision_cache"]),
+            "timestamp": datetime.now(timezone.utc).isoformat()
+        }
+
+    def to_document(self) -> Dict[str, Any]:
+        """Export full internal state snapshot."""
+        return deepcopy(self._state)
 
 
-def resolve_followup(user_input: str, working_memory: WorkingMemory) -> str:
-    """
-    Rewrites vague follow-ups using the tracked current_topic.
-    Returns user_input unchanged if there's no topic to resolve against,
-    or if the input doesn't look like a vague follow-up.
-    """
-    topic = working_memory.current_topic
+_global_wm_instance: Optional[WorkingMemory] = None
 
-    if not topic:
-        return user_input
 
-    text = user_input.strip()
-    had_question_mark = text.endswith("?")
-    lowered = text.rstrip("?").strip().lower()
-
-    # Case 1: exact match against a known vague follow-up phrase
-    for trigger in _FOLLOWUP_TRIGGERS:
-        if lowered == trigger:
-            rewritten = trigger
-            for pronoun in _PRONOUNS:
-                rewritten = rewritten.replace(pronoun, topic)
-
-            if topic not in rewritten:
-                rewritten = f"{rewritten} about {topic}"
-
-            suffix = "?" if (had_question_mark or "how" in rewritten or "why" in rewritten) else ""
-            return rewritten + suffix
-
-    # Case 2: standalone pronoun substitution for short inputs
-    # (e.g. "explain that simply" -> "explain gravity simply")
-    words = lowered.split()
-    if len(words) <= 6 and any(word in _PRONOUNS for word in words):
-        replaced = [topic if word in _PRONOUNS else word for word in words]
-        result = " ".join(replaced)
-        return result + ("?" if had_question_mark else "")
-
-    return user_input
+def get_working_memory() -> WorkingMemory:
+    """Singleton getter for global Working Memory instance."""
+    global _global_wm_instance
+    if _global_wm_instance is None:
+        _global_wm_instance = WorkingMemory()
+    return _global_wm_instance
