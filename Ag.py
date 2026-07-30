@@ -4,7 +4,7 @@ from executive import (
     analyze_context,
     build_execution_plan
 )
-from working_memory import WorkingMemory, update_working_memory, resolve_followup, resolve_thread_reference
+from working_memory import WorkingMemory, resolve_followup
 from conversation_manager import analyze_action_pattern
 from analytics_logger import log_event
 import json
@@ -749,10 +749,16 @@ def store_last_answer(category: str, memory: dict, last_brain_answer: dict) -> N
 
 
 def store_discussion(category: str, memory: dict, working_memory: WorkingMemory) -> None:
+    # MIGRATION NOTE: discussion_topic() is not present on the new WorkingMemory
+    # class. Kept as a method call under the new naming convention; see
+    # "MISSING WORKING MEMORY METHODS" for the required addition.
     topic = working_memory.discussion_topic()
 
+    # MIGRATION NOTE: old `working_memory.discussion_buffer` attribute replaced
+    # with `working_memory.get_discussion_entries()`. This accessor does not
+    # exist yet on the new class; see "MISSING WORKING MEMORY METHODS".
     combined_answer = " ".join(
-        entry["answer"] for entry in working_memory.discussion_buffer if entry.get("answer")
+        entry["answer"] for entry in working_memory.get_discussion_entries() if entry.get("answer")
     ).strip() or "No content captured."
 
     summary = generate_memory_summary(f"discussion about {topic}", combined_answer)
@@ -780,18 +786,24 @@ def main():
     pending_shutdown_category = False
     pending_temporary_brain_action = None
     working_memory = WorkingMemory()
-    working_memory.default_brain = load_brain_mode()
+    # MIGRATION NOTE: old `working_memory.default_brain = ...` attribute
+    # replaced with the new decision cache API.
+    working_memory.cache_decision("default_brain", load_brain_mode())
 
     while True:
         user_input = input("You: ")
         cleaned_input = user_input.strip().lower()
 
         if cleaned_input == "save last response":
+            # MIGRATION NOTE: old `working_memory.has_unsaved_discussion()` /
+            # `working_memory.discussion_buffer[-1]` kept under the new
+            # method-call convention; both are missing from the new class.
+            # See "MISSING WORKING MEMORY METHODS".
             if not working_memory.has_unsaved_discussion():
                 print("AG: There is no recent response to save.")
                 continue
 
-            last_brain_answer = working_memory.discussion_buffer[-1]
+            last_brain_answer = working_memory.get_discussion_entries()[-1]
             pending_category = True
             print("AG: Where should I store it?")
 
@@ -823,7 +835,9 @@ def main():
             if decision == "STORE":
                 action = pending_temporary_brain_action
                 previous_mode = load_brain_mode()
-                working_memory.temporary_brain_active = True
+                # MIGRATION NOTE: old `working_memory.temporary_brain_active = True`
+                # attribute replaced with a temporary fact.
+                working_memory.add_fact("temporary_brain_active", True)
 
                 if action["target"] == "cloud":
                     reply = safe_response(ask_cloud_direct(action["resolved_query"]))
@@ -842,16 +856,27 @@ def main():
                 # Thread continuity fix: this turn must persist like any other.
                 # intent="cloud_brain" so extract_topic won't fire on the raw
                 # routing command — current_topic is deliberately left untouched.
-                update_working_memory(working_memory, action["resolved_query"], reply, "cloud_brain")
+                # MIGRATION NOTE: old free function `update_working_memory(...)`
+                # replaced with a method call; the method itself is missing
+                # from the new WorkingMemory class. See
+                # "MISSING WORKING MEMORY METHODS".
+                working_memory.update_working_memory(action["resolved_query"], reply, "cloud_brain")
                 working_memory.add_to_discussion(action["resolved_query"], reply)
 
-                working_memory.temporary_brain_active = False
-                working_memory.pending_actions = []
+                # MIGRATION NOTE: old `working_memory.temporary_brain_active = False`
+                # attribute replaced with a temporary fact.
+                working_memory.add_fact("temporary_brain_active", False)
+                # MIGRATION NOTE: old `working_memory.pending_actions = []`
+                # (list of at most one item) replaced with the singular
+                # pending-action API.
+                working_memory.clear_pending_action()
                 pending_temporary_brain_action = None
                 continue
 
             if decision == "SKIP":
-                working_memory.pending_actions = []
+                # MIGRATION NOTE: old `working_memory.pending_actions = []`
+                # replaced with the singular pending-action API.
+                working_memory.clear_pending_action()
                 pending_temporary_brain_action = None
                 print("AG: Cancelled. Default brain mode unchanged.")
                 continue
@@ -876,6 +901,9 @@ def main():
 
             if decision == "SKIP":
                 pending_shutdown_confirmation = False
+                # MIGRATION NOTE: old `working_memory.clear_discussion()` kept
+                # under the new method-call convention; missing from the new
+                # class. See "MISSING WORKING MEMORY METHODS".
                 working_memory.clear_discussion()
                 print("AG: Discussion discarded.")
                 print("AG: Shutting down.")
@@ -982,13 +1010,18 @@ def main():
 
             if action["operation"] == "set_default_brain":
                 print(set_brain_mode(action["target"]))
-                working_memory.default_brain = action["target"]
+                # MIGRATION NOTE: old `working_memory.default_brain = ...`
+                # attribute replaced with the decision cache API.
+                working_memory.cache_decision("default_brain", action["target"])
                 log_event("brain_mode_changed", {"mode": action["target"]})
                 continue
 
             if action["operation"] == "temporary_brain_use":
                 pending_temporary_brain_action = action
-                working_memory.pending_actions = [action]
+                # MIGRATION NOTE: old `working_memory.pending_actions = [action]`
+                # (a list holding at most one item) replaced with the singular
+                # pending-action API.
+                working_memory.set_pending_action(action)
                 scope_label = action["scope"].replace("_", " ")
                 print(f"AG: {action['target'].capitalize()} brain requested for this {scope_label}. Proceed?")
                 continue
@@ -1000,16 +1033,25 @@ def main():
         if intent == "unknown":
             resolved_input = resolve_followup(user_input, working_memory)
             if resolved_input == user_input:
-                resolved_input = resolve_thread_reference(user_input, working_memory)
+                # MIGRATION NOTE: old free function `resolve_thread_reference(...)`
+                # replaced with a method call; the method itself is missing
+                # from the new WorkingMemory class. See
+                # "MISSING WORKING MEMORY METHODS".
+                resolved_input = working_memory.resolve_thread_reference(user_input)
 
             if resolved_input != user_input:
                 brain_input = resolved_input
                 intent = detect_intent(brain_input)
-                working_memory.follow_up_depth += 1
+                # MIGRATION NOTE: old `working_memory.follow_up_depth += 1`
+                # attribute replaced with a temporary fact counter.
+                working_memory.add_fact(
+                    "follow_up_depth",
+                    working_memory.get_fact("follow_up_depth", 0) + 1
+                )
                 log_event("topic_continuation_detected", {
                     "original_input": original_input,
                     "resolved_input": brain_input,
-                    "topic": working_memory.current_topic
+                    "topic": working_memory.get_topic()
                 })
 
         response = process_input(brain_input, memory, tasks, intent)
@@ -1028,7 +1070,10 @@ def main():
         print(response)
 
         answer_text = response.replace("AG: ", "", 1) if response.startswith("AG: ") else response
-        update_working_memory(working_memory, original_input, answer_text, intent)
+        # MIGRATION NOTE: old free function `update_working_memory(...)`
+        # replaced with a method call; missing from the new class. See
+        # "MISSING WORKING MEMORY METHODS".
+        working_memory.update_working_memory(original_input, answer_text, intent)
 
         if intent in ["unknown", "cloud_brain", "recall"]:
             if answer_text == BRAIN_FALLBACK:
@@ -1036,7 +1081,7 @@ def main():
             else:
                 log_event("brain_response_completed", {
                     "intent": intent,
-                    "topic": working_memory.current_topic
+                    "topic": working_memory.get_topic()
                 })
 
         if response.startswith("AG: ") and intent in ["unknown", "cloud_brain"]:

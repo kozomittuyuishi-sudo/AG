@@ -220,3 +220,43 @@ class CognitiveEngine:
             "requires_simulation": intent_analysis.get("requires_simulation", False),
             "payload_created_at": datetime.now(timezone.utc).isoformat()
         }
+
+    # ------------------------------------------------------------------
+    # 6. Single-Turn Orchestrator (pipeline entry point)
+    # ------------------------------------------------------------------
+
+    def process_turn(self, user_input: str, memory_snapshot: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Execute the full Cognitive Engine pipeline for a single user turn.
+
+        This is the primary entry point called by ``AGPipeline``. It runs
+        all five internal stages in sequence and returns a fully assembled
+        Brain execution payload.
+
+        Stages:
+            1. ``ingest_context``      — normalize Working Memory snapshot
+            2. ``classify_intent``     — determine cognitive mode
+            3. ``determine_brain_demand`` — frame model requirements
+            4. (implicit) scratchpad evaluated inside ``assemble_payload``
+            5. ``assemble_payload``    — build the final dispatch payload
+
+        :param user_input:      The cleaned user utterance for this turn.
+        :param memory_snapshot: The dict returned by
+                                ``WorkingMemory.build_context()`` or
+                                ``WorkingMemory.get_snapshot()``.
+        :returns: A payload dict suitable for ``BrainDispatcher.dispatch()``.
+        """
+        if not isinstance(memory_snapshot, dict):
+            memory_snapshot = {}
+
+        # Stage 1 — normalise context
+        cog_state = self.ingest_context(memory_snapshot)
+
+        # Stage 2 — classify intent / cognitive mode
+        intent_analysis = self.classify_intent(user_input, cog_state)
+
+        # Stage 3 — determine brain requirements
+        brain_demand = self.determine_brain_demand(intent_analysis, cog_state)
+
+        # Stage 4+5 — evaluate scratchpad and assemble final payload
+        return self.assemble_payload(user_input, cog_state, intent_analysis, brain_demand)

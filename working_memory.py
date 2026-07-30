@@ -53,7 +53,11 @@ class WorkingMemory:
             "pending_confirmation": None,
             "pending_action": None,
             "decision_cache": {},
-            "expires_at": expires_at.isoformat() if expires_at else None
+            "expires_at": expires_at.isoformat() if expires_at else None,
+            # Discussion buffer: list of {question, answer} dicts
+            # Accumulates Q&A pairs within the current topic for optional
+            # long-term storage at session end (no disk writes from here).
+            "discussion_buffer": [],
         }
 
     def _touch(self) -> None:
@@ -241,6 +245,196 @@ class WorkingMemory:
         self._touch()
 
     # ------------------------------------------------------------------
+    # Discussion Buffer
+    # ------------------------------------------------------------------
+
+    def add_to_discussion(self, question: str, answer: str) -> None:
+        """
+        Record a Q&A pair in the discussion buffer.
+
+        The buffer accumulates entries for the current topic so the main
+        loop can offer to persist the whole discussion at session end.
+        Does NOT write to disk.
+        """
+        entry = {
+            "question": str(question).strip(),
+            "answer": str(answer).strip(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+        self._state["discussion_buffer"].append(entry)
+        self._touch()
+
+    def get_discussion_entries(self) -> List[Dict[str, Any]]:
+        """Return a copy of all buffered discussion entries."""
+        return deepcopy(self._state.get("discussion_buffer", []))
+
+    def has_unsaved_discussion(self) -> bool:
+        """Return True if the discussion buffer contains at least one entry."""
+        return len(self._state.get("discussion_buffer", [])) > 0
+
+    def clear_discussion(self) -> None:
+        """Empty the discussion buffer (e.g. after the user saves or discards it)."""
+        self._state["discussion_buffer"] = []
+        self._touch()
+
+    def discussion_topic(self) -> str:
+        """
+        Return the current topic label for the discussion.
+
+        Falls back to inferring a topic from the first buffered entry's
+        question if ``current_topic`` is not set.
+        """
+        topic = self._state.get("current_topic")
+        if topic:
+            return topic
+
+        entries = self._state.get("discussion_buffer", [])
+        if entries:
+            # Use a truncated version of the first question as the topic label.
+            first_q = entries[0].get("question", "").strip()
+            if first_q:
+                return first_q[:60].rstrip() + ("..." if len(first_q) > 60 else "")
+
+        return "general"
+
+    # ------------------------------------------------------------------
+    # Update Working Memory (main-loop integration helper)
+    # ------------------------------------------------------------------
+
+    def update_working_memory(self, user_input: str, answer: str, intent: str) -> None:
+        """
+        Convenience updater called after every main-loop turn.
+
+        - Extracts or refreshes ``current_topic`` from the user's input
+          and the resolved intent.
+        - Stores the latest Q&A pair in ``conversation_reference`` so
+          that follow-up resolution has something to attach to.
+        - Does NOT write to disk.
+
+        :param user_input: The raw user utterance for this turn.
+        :param answer:     The response text produced by AG.
+        :param intent:     The intent label returned by ``detect_intent``.
+        """
+        text = str(user_input).strip()
+        intent = str(intent).strip() if intent else "unknown"
+
+        # --- Topic extraction ---
+        # Intents that carry meaningful topic signals:
+        _topic_intents = {
+            "unknown", "cloud_brain", "recall", "remember", "project_status",
+            "next_step", "project_name",
+        }
+        if intent in _topic_intents and text:
+            # Derive a short topic label from the utterance.
+            topic_candidate = text[:80].rstrip()
+            # Strip common question starters for cleaner labels.
+            for starter in (
+                "what is ", "who is ", "tell me about ", "explain ",
+                "how does ", "why does ", "cloud ",
+            ):
+                if topic_candidate.lower().startswith(starter):
+                    topic_candidate = topic_candidate[len(starter):].strip()
+                    break
+            if topic_candidate:
+                self._state["current_topic"] = topic_candidate
+
+        # --- Conversation reference ---
+        self._state["conversation_reference"]["last_input"] = text
+        self._state["conversation_reference"]["last_answer"] = str(answer).strip()
+        self._state["conversation_reference"]["last_intent"] = intent
+        self._touch()
+
+    # ------------------------------------------------------------------
+    # Thread Reference Resolution
+    # ------------------------------------------------------------------
+
+    # Pronoun / short-reference patterns that indicate the user is
+    # continuing the previous topic rather than starting a new one.
+    _CONTINUATION_PRONOUNS = frozenset({"it", "that", "this", "them", "those", "these"})
+
+    _CONTINUATION_PREFIXES = (
+        "tell me more",
+        "more about",
+        "can you explain",
+        "give me examples",
+        "simplify that",
+        "expand on",
+        "go deeper",
+        "elaborate",
+        "why",
+        "how so",
+        "what about",
+        "and",
+    )
+
+    def resolve_thread_reference(self, user_input: str) -> str:
+        """
+        Attempt to resolve a follow-up / contextual reference using the
+        current topic and conversation reference stored in Working Memory.
+
+        Returns the enriched input string if a reference was resolved,
+        or the original ``user_input`` unchanged if no resolution was
+        possible.
+
+        This is a lightweight, deterministic helper — it does NOT call
+        any LLM and does NOT modify internal state.
+        """
+        if not user_input or not isinstance(user_input, str):
+            return user_input
+
+        text = user_input.strip()
+        text_lower = text.lower()
+        words = text_lower.split()
+
+        topic = self._state.get("current_topic")
+        last_input = self._state.get("conversation_reference", {}).get("last_input", "")
+
+        if not topic:
+            return user_input  # nothing to attach to
+
+        # 1. Single-pronoun reference: "it", "that", "this" → replace with topic
+        if len(words) == 1 and words[0] in self._CONTINUATION_PRONOUNS:
+            return f"{text} about {topic}"
+
+        # 2. Known continuation prefix: "tell me more", "explain that", etc.
+        for prefix in self._CONTINUATION_PREFIXES:
+            if text_lower.startswith(prefix):
+                # Avoid double-appending if the topic is already in the text
+                if topic.lower() not in text_lower:
+                    return f"{text} (about {topic})"
+                return user_input
+
+        # 3. Very short input (≤ 4 words) that doesn't match a known intent
+        if len(words) <= 4:
+            if topic.lower() not in text_lower:
+                return f"{text} (continuing the {topic} discussion)"
+
+        return user_input
+
+    # ------------------------------------------------------------------
+    # Pipeline / Snapshot Aliases
+    # ------------------------------------------------------------------
+
+    def get_snapshot(self) -> Dict[str, Any]:
+        """
+        Alias for ``build_context()``.
+
+        ``AGPipeline._get_memory_snapshot()`` probes for ``get_snapshot``
+        first, so this keeps the pipeline working against WorkingMemory
+        without needing any adapter.
+        """
+        return self.build_context()
+
+    def get_state(self) -> Dict[str, Any]:
+        """
+        Alias for ``to_document()``.
+
+        Provides a second name the pipeline and tests can use
+        interchangeably with ``to_document``.
+        """
+        return self.to_document()
+
+    # ------------------------------------------------------------------
     # Context Builder & Document Conversion
     # ------------------------------------------------------------------
 
@@ -280,3 +474,79 @@ def get_working_memory() -> WorkingMemory:
     if _global_wm_instance is None:
         _global_wm_instance = WorkingMemory()
     return _global_wm_instance
+
+
+# ---------------------------------------------------------------------------
+# Module-level free functions
+#
+# These are imported directly by Ag.py and conversation_manager.py.
+# They delegate to the WorkingMemory instance passed as an argument so
+# that callers don't have to interact with the singleton themselves.
+# ---------------------------------------------------------------------------
+
+def resolve_thread_reference(user_input: str, working_memory: WorkingMemory) -> str:
+    """
+    Free-function wrapper around ``WorkingMemory.resolve_thread_reference``.
+
+    ``conversation_manager.py`` imports this as:
+        from working_memory import resolve_thread_reference
+
+    :param user_input:     The raw user utterance to resolve.
+    :param working_memory: The active WorkingMemory instance.
+    :returns:              Enriched input string, or ``user_input`` unchanged.
+    """
+    if not isinstance(working_memory, WorkingMemory):
+        return user_input
+    return working_memory.resolve_thread_reference(user_input)
+
+
+def resolve_followup(user_input: str, working_memory: WorkingMemory) -> str:
+    """
+    Resolves a conversational follow-up by trying both the conversation
+    reference stored in Working Memory and the lightweight thread-reference
+    resolver.
+
+    ``Ag.py`` calls this as a free function on every turn whose intent is
+    ``"unknown"`` *before* falling back to the method-level resolver:
+
+        resolved_input = resolve_followup(user_input, working_memory)
+        if resolved_input == user_input:
+            resolved_input = working_memory.resolve_thread_reference(user_input)
+
+    :param user_input:     The raw user utterance.
+    :param working_memory: The active WorkingMemory instance.
+    :returns:              Enriched input string, or ``user_input`` unchanged.
+    """
+    if not isinstance(working_memory, WorkingMemory):
+        return user_input
+
+    text = str(user_input).strip()
+    text_lower = text.lower()
+    words = text_lower.split()
+
+    # -- Attempt 1: conversation_reference -----------------------------------
+    conv_ref = working_memory.get_conversation_reference()
+    last_input = conv_ref.get("last_input", "")
+    last_answer = conv_ref.get("last_answer", "")
+    topic = working_memory.get_topic()
+
+    # If the user is clearly referring back to the previous answer/topic,
+    # prepend helpful context so the brain can make sense of it.
+    BACK_REF_WORDS = frozenset({
+        "it", "that", "this", "them", "those", "these",
+        "why", "how", "really", "seriously",
+    })
+
+    if words and all(w in BACK_REF_WORDS for w in words):
+        if topic:
+            return f"{text} (about {topic})"
+        if last_input:
+            return f"{text} (following up on: {last_input[:60]})"
+
+    # -- Attempt 2: lightweight thread-reference resolver --------------------
+    resolved = working_memory.resolve_thread_reference(text)
+    if resolved != text:
+        return resolved
+
+    # -- No resolution found -------------------------------------------------
+    return user_input

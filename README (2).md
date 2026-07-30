@@ -47,8 +47,8 @@ the Brain generate language.
 | 3 | Project Context | ✅ Complete |
 | 4 | Tasks | ✅ Complete |
 | 5 | Executive Layer | 🟡 Partial (Storage/Category/Brain Routing/Planning/Context Analysis done) |
-| 6 | Working Memory | 🟡 Phase A complete, Phase B (expanded cognitive workspace) architected, not yet built |
-| 7 | Cognitive Engine | ⬜ Planned |
+| 6 | Working Memory | ✅ Phase A complete (session context, discussion buffer, follow-up resolution, pipeline compatibility) |
+| 7 | Cognitive Engine | 🟡 Phase A complete (context ingestion, intent classification, brain demand, scratchpad evaluation, `process_turn` pipeline entry point) |
 | 8 | Mood Engine | ⬜ Planned |
 | 9 | Interface (Matrix UI) | ⬜ Planned |
 | 10 | Input (Voice + Vision) | ⬜ Planned |
@@ -64,6 +64,7 @@ Plus, built alongside the core pipeline as the **AG Beta infrastructure layer**:
 | Index Manager | ✅ Phase A — keyword/tag/entity search indexes |
 | Control Layer | ✅ Phase A — Brain Registry + Authorization Manager |
 | Conversation Manager | ✅ Phase A — topic tracking, reference resolution, pending state |
+| AG Pipeline | ✅ Phase A — end-to-end cognitive pipeline orchestration |
 
 **Build order:** finish Executive → Working Memory (expanded) → Cognitive Engine
 (kept to a few concrete mechanisms, not a dashboard) → Mood → Interface/Input/Automation.
@@ -84,7 +85,12 @@ AG/
 ├── brain.py                 # Local/cloud/auto brain selection and calling
 ├── local_brain.py           # Ollama (Qwen2.5:3B) local inference
 ├── executive.py             # Planning + Context Analysis (Executive Layer)
-├── working_memory.py        # Session-only topic/thread tracking, follow-up resolution
+├── executive_layer.py       # Executive Layer Phase A — storage/category routing decisions
+├── working_memory.py        # Session context, discussion buffer, follow-up resolution
+├── cognitive_engine.py      # Prefrontal reasoning pipeline — intent classification, brain demand, process_turn
+├── brain_dispatcher.py      # Brain adapter routing and dispatch
+├── response_processor.py    # Response sanitization and safety layer
+├── ag_pipeline.py           # End-to-end cognitive pipeline orchestration
 ├── conversation_manager.py  # Action pattern detection (brain switching) + conversation state
 ├── probe_simulator.py       # Risk/outcome simulation before actions execute
 ├── schema_processor.py      # Document normalization + validation (all AG document types)
@@ -148,11 +154,17 @@ Type naturally. A few structural commands:
 Each Beta module is tested standalone, no pytest required (plain asserts):
 
 ```bash
+python test_working_memory.py
+python test_cognitive_engine.py
+python test_brain_dispatcher.py
+python test_response_processor.py
+python test_ag_pipeline.py
+python test_executive_layer.py
+python test_conversation_manager.py
 python test_probe_simulator.py
 python test_schema_processor.py
 python test_storage_index.py
 python test_control_layer.py
-python test_conversation_manager.py
 ```
 
 All tests run against temporary/isolated data — none of them touch your
@@ -190,15 +202,17 @@ a61a1d0  AG v0.25 Offline brain operational
 
 ## What's next
 
-1. **Working Memory Phase B** — expand beyond topic/thread tracking to own
-   current objective, current task, a reasoning scratchpad, retrieved-memory
-   caching, a decision cache, and a unified `build_context()` — the active
-   cognitive workspace between Conversation Manager and the (future)
-   Cognitive Engine.
-2. **Cognitive Engine** — a small number of concrete reasoning mechanisms
-   (pattern recognition, causal reasoning, self-verification), not a
-   ten-meter dashboard of unimplemented capability labels.
-3. Eventually wire Conversation Manager, Working Memory, and Executive
+1. **Executive Layer Phase B completion** — close the remaining gap: wire
+   `executive_layer.py` into `Ag.py`'s main loop so the Storage/Category
+   decisions from `ExecutiveDecision` drive actual memory writes, replacing
+   the older `executive.py` free functions.
+2. **Cognitive Engine Phase B** — add concrete reasoning mechanisms:
+   pattern recognition, causal chain evaluation, and self-verification
+   against Working Memory facts. Keep it a small number of mechanisms,
+   not a feature-label dashboard.
+3. **Mood Engine** — tone/delivery layer that adjusts AG's response style
+   based on cognitive mode and conversation state.
+4. Eventually wire Conversation Manager, Working Memory, and Executive
    together as the single source of conversational truth, with Storage
    Manager / Index Manager / Schema Processor / Control Layer underneath
    as the persistence and safety layer.

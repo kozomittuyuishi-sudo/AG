@@ -6,5 +6,11 @@ __pycache__/
 memory.json
 project_context.json
 tasks.json
-logs.txt.vscode/
+logs.txt
+
+kiro-cli.exe
+*.exe
+
+data/warehouse/
+.vscode/
 .idea/

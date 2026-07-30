@@ -38,11 +38,60 @@ Your role:
 Assist the user with projects, memory, productivity, technical explanation, and workflow guidance.
 """
 
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=os.getenv("OPENROUTER_API_KEY"),
-    timeout=30,
-)
+client = None
+
+
+class ClientWrapper:
+    """Light wrapper around the OpenAI client to ensure the expected
+    chat.completions.create call exists and to provide clearer errors.
+    """
+    def __init__(self, inner):
+        self._inner = inner
+
+    @property
+    def chat(self):
+        # Provide an object with a completions attribute that implements create()
+        inner = self._inner
+
+        class CompletionsProxy:
+            def __init__(self, inner):
+                self._inner = inner
+
+            def create(self, *args, **kwargs):
+                # Forward to the underlying client if possible, raising a clear
+                # error if the expected API is not present.
+                target = getattr(self._inner, "chat", None)
+                if target is None:
+                    raise RuntimeError("Underlying client has no 'chat' attribute")
+
+                completions = getattr(target, "completions", None)
+                if completions is None:
+                    raise RuntimeError("Underlying client has no 'chat.completions' attribute")
+
+                create_fn = getattr(completions, "create", None)
+                if create_fn is None:
+                    raise RuntimeError("Underlying client has no 'chat.completions.create' method")
+
+                return create_fn(*args, **kwargs)
+
+        class ChatProxy:
+            completions = CompletionsProxy(inner)
+
+        return ChatProxy()
+
+
+def get_client():
+    global client
+
+    if client is None:
+        underlying = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=os.getenv("OPENROUTER_API_KEY"),
+            timeout=30,
+        )
+        client = ClientWrapper(underlying)
+
+    return client
 
 
 def load_brain_mode() -> str:
@@ -95,7 +144,7 @@ def get_brain_status() -> str:
 
 
 def ask_cloud_brain(message) -> str:
-    response = client.chat.completions.create(
+    response = get_client().chat.completions.create(
         model="tencent/hy3:free",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
