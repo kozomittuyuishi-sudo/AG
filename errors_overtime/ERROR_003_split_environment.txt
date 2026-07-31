@@ -1,0 +1,74 @@
+ERROR ID     : ERROR_003
+DATE         : 2026-07-31
+SEVERITY     : HIGH
+STATUS       : ACTIVE
+CATEGORY     : Environment / Configuration
+
+TITLE
+-----
+Split package environment — venv and system Python have complementary missing packages
+
+DESCRIPTION
+-----------
+Two Python installations exist on this machine. Neither has a complete
+set of packages needed to run Ag.py:
+
+  SYSTEM PYTHON  C:\Python314\python.exe
+  ----------------------------------------
+  openai         2.51.0     PRESENT
+  python-dotenv  -          ABSENT
+  ollama         -          ABSENT
+  jiter          0.16.0     PRESENT (newer)
+
+  VENV PYTHON    D:\AG\.venv\Scripts\python.exe
+  -----------------------------------------------
+  openai         -          ABSENT
+  python-dotenv  1.2.2      PRESENT
+  ollama         0.6.2      PRESENT
+  jiter          0.15.0     PRESENT
+
+The venv was created from a third Python interpreter:
+  C:\Users\Bhuvan\AppData\Local\Python\pythoncore-3.14-64\python.exe
+(recorded in .venv\pyvenv.cfg: home = that path)
+
+The venv has include-system-site-packages = false, meaning it is
+entirely isolated and cannot see C:\Python314's packages.
+
+IMPACT
+------
+- Running "python Ag.py"                 -> crash (no dotenv)
+- Running ".venv\Scripts\python.exe Ag.py" -> crash (no openai)
+- No launch method currently works from cold start
+- Test suite partially passes only because individual test files
+  do not import brain.py or executive.py directly in most cases
+
+PACKAGES MISSING FROM VENV (required by Ag.py and its modules)
+--------------------------------------------------------------
+  openai==2.41.1     (brain.py line 1)
+  
+  All other dependencies are present in the venv.
+
+PACKAGES MISSING FROM SYSTEM PYTHON (if using system python)
+-------------------------------------------------------------
+  python-dotenv==1.2.2   (brain.py line 2, Ag.py line 14)
+  ollama==0.6.2           (local_brain uses subprocess, not this lib,
+                           but ollama lib used in tests and future use)
+
+FIX REQUIRED
+------------
+The venv is the correct execution environment. Fix it:
+
+  Step 1: Install missing package into venv
+    D:\AG\.venv\Scripts\pip.exe install openai==2.41.1
+
+  Step 2: Always launch Ag.py using venv python:
+    D:\AG\.venv\Scripts\python.exe Ag.py
+
+  Step 3 (optional): Install full requirements into venv:
+    D:\AG\.venv\Scripts\pip.exe install -r "requirements (1).txt"
+
+LONG-TERM RECOMMENDATION
+-------------------------
+Add a launcher script (run.bat or run.ps1) that explicitly calls
+.venv\Scripts\python.exe Ag.py to prevent confusion over which python
+is being used.

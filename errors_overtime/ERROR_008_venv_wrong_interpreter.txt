@@ -1,0 +1,52 @@
+ERROR ID     : ERROR_008
+DATE         : 2026-07-31
+SEVERITY     : MEDIUM
+STATUS       : ACTIVE
+CATEGORY     : Environment / Configuration
+
+TITLE
+-----
+Virtual environment created from non-standard Python interpreter path
+
+DESCRIPTION
+-----------
+The venv at D:\AG\.venv was created from:
+  C:\Users\Bhuvan\AppData\Local\Python\pythoncore-3.14-64\python.exe
+
+But the active system Python is:
+  C:\Python314\python.exe
+
+Contents of .venv\pyvenv.cfg:
+  home = C:\Users\Bhuvan\AppData\Local\Python\pythoncore-3.14-64
+  include-system-site-packages = false
+  version = 3.14.6
+  executable = C:\Users\Bhuvan\AppData\Local\Python\pythoncore-3.14-64\python.exe
+  command = C:\Users\Bhuvan\AppData\Local\Python\pythoncore-3.14-64\python.exe -m venv d:\AG\.venv
+
+Both are version 3.14.6, so the Python version is not a problem.
+However:
+  - Packages installed via the system pip (C:\Python314\pip) go to
+    C:\Python314\Lib\site-packages — NOT visible to the venv
+  - Packages installed via .venv\Scripts\pip go to
+    D:\AG\.venv\Lib\site-packages — the correct location for venv use
+
+This mismatch means that installing a package with `pip install openai`
+at the system level does NOT make it available inside the venv.
+
+IMPACT
+------
+- Developers may install packages system-wide and expect them to be
+  available in the venv — they will not be
+- Package installations need to explicitly use:
+    D:\AG\.venv\Scripts\pip.exe install <package>
+  NOT:
+    pip install <package>   (this installs to C:\Python314)
+
+RECOMMENDATION
+--------------
+Always prefix pip commands with the venv path:
+  D:\AG\.venv\Scripts\pip.exe install openai==2.41.1
+
+Or activate the venv first:
+  D:\AG\.venv\Scripts\Activate.ps1
+  pip install openai==2.41.1

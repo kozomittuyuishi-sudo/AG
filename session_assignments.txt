@@ -1,0 +1,118 @@
+PROJECT AG — SESSION ASSIGNMENTS
+=================================
+Lead Engineer: Kiro
+Session Date: 2026-07-30
+Branch: main
+
+
+ROLE
+----
+Lead software engineer for Project AG.
+Mission: Build AG into a modular cognitive AI system.
+
+
+STANDING RULES
+--------------
+- Never redesign architecture without approval.
+- Always search the repository before modifying code.
+- Preserve existing functionality.
+- Fix root causes, not symptoms.
+- Keep modules loosely coupled.
+- Avoid duplicate code.
+- Prefer extending existing systems over replacing them.
+- Update documentation after every implementation.
+- Run tests before considering any task complete.
+- Never leave TODO placeholders unless explicitly instructed.
+
+
+WORKFLOW (applied to every task)
+---------------------------------
+Understand → Plan → Implement → Verify → Test → Document → Report
+
+
+COMPLETED THIS SESSION
+-----------------------
+
+1. WorkingMemory Compatibility (working_memory.py)
+   - Added discussion buffer: add_to_discussion, get_discussion_entries,
+     has_unsaved_discussion, clear_discussion, discussion_topic
+   - Added update_working_memory(user_input, answer, intent)
+   - Added resolve_thread_reference(user_input) method
+   - Added get_snapshot() and get_state() pipeline aliases
+   - Added module-level free functions: resolve_followup, resolve_thread_reference
+   - All methods called by Ag.py and conversation_manager.py now satisfied
+
+2. CognitiveEngine Pipeline Entry Point (cognitive_engine.py)
+   - Added process_turn(user_input, memory_snapshot) orchestrator method
+   - Runs all 5 internal stages: ingest_context → classify_intent →
+     determine_brain_demand → evaluate_scratchpad → assemble_payload
+   - This is the single-call entry point AGPipeline expects
+
+3. Ag.py Import Fix
+   - Added resolve_followup to the working_memory import line
+
+4. Documentation (README (2).md)
+   - Updated build status table (Working Memory, Cognitive Engine)
+   - Added AG Pipeline to Beta infrastructure layer table
+   - Updated project layout with all new modules
+   - Expanded running tests section to list all 11 test files
+   - Updated What's next section to reflect actual remaining work
+
+5. .gitignore Update
+   - Added *.exe (covers kiro-cli.exe and any future binaries)
+   - Added data/warehouse/ (analytics event log, not source)
+
+6. Committed to main (5032b46)
+   - 19 files changed, 1463 insertions
+
+
+TEST RESULTS (end of session)
+------------------------------
+test_working_memory      PASS  (8 tests)
+test_executive_layer     PASS  (3 tests)
+test_brain_dispatcher    PASS  (3 tests)
+test_response_processor  PASS  (3 tests)
+test_cognitive_engine    PASS  (5 tests)
+test_ag_pipeline         PASS  (7 tests)   <- was FAILING, now fixed
+test_conversation_manager PASS (18 tests)
+test_control_layer       PASS  (14 tests)
+test_storage_index       PASS  (20 tests)
+test_schema_processor    PASS  (12 tests)
+test_probe_simulator     PASS  (8 tests)
+
+TOTAL: 11/11 test files passing, 0 failures
+
+
+OPEN / NEXT PRIORITY WORK
+--------------------------
+1. Wire executive_layer.py into Ag.py main loop
+   - ExecutiveDecision storage routing is implemented but not connected
+     to the actual memory.json write path
+   - Replaces the older executive.py free functions for storage/category decisions
+
+2. Cognitive Engine Phase B
+   - Concrete reasoning mechanisms: pattern recognition, causal chain
+     evaluation, self-verification against Working Memory facts
+   - Keep to a small number of real mechanisms, not capability labels
+
+3. Mood Engine
+   - Tone and delivery layer that adjusts AG's response style based on
+     cognitive mode and conversation state
+   - Sits between ResponseProcessor and final output
+
+
+MODULES OWNED THIS SESSION
+----------------------------
+working_memory.py
+cognitive_engine.py
+ag_pipeline.py          (new — Beta pipeline orchestration)
+brain_dispatcher.py     (new — Brain adapter routing)
+executive_layer.py      (new — Executive storage/category decisions)
+response_processor.py   (new — Response sanitization and safety)
+test_ag_pipeline.py     (new)
+test_brain_dispatcher.py (new)
+test_executive_layer.py (new)
+test_response_processor.py (new)
+Ag.py                   (import fix only)
+README (2).md           (documentation update)
+.gitignore              (binary and warehouse exclusions)

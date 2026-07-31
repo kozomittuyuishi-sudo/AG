@@ -1,0 +1,77 @@
+ERROR ID     : ERROR_001
+DATE         : 2026-07-31
+SEVERITY     : CRITICAL
+STATUS       : ACTIVE
+CATEGORY     : Missing Package / ModuleNotFoundError
+
+TITLE
+-----
+openai package is not installed in the virtual environment (.venv)
+
+AFFECTED FILES
+--------------
+  brain.py           line 1     from openai import OpenAI
+  executive.py       line 3     from brain import ask_brain  (cascade)
+  test_brain.py      line 1     from brain import (...)       (test fails)
+
+FULL TRACEBACK
+--------------
+When running with .venv\Scripts\python.exe:
+
+  Traceback (most recent call last):
+    File "D:\AG\brain.py", line 1, in <module>
+      from openai import OpenAI
+  ModuleNotFoundError: No module named 'openai'
+
+  Traceback (most recent call last):
+    File "D:\AG\executive.py", line 3, in <module>
+      from brain import ask_brain
+    File "D:\AG\brain.py", line 1, in <module>
+      from openai import OpenAI
+  ModuleNotFoundError: No module named 'openai'
+
+ROOT CAUSE
+----------
+Two separate Python installations exist on this machine:
+
+  SYSTEM PYTHON   : C:\Python314\python.exe
+  VENV PYTHON     : D:\AG\.venv\Scripts\python.exe
+
+The venv was created from a DIFFERENT Python interpreter:
+  C:\Users\Bhuvan\AppData\Local\Python\pythoncore-3.14-64\python.exe
+  (as recorded in .venv\pyvenv.cfg)
+
+The venv has include-system-site-packages = false, so it is fully
+isolated and cannot see packages from any system Python.
+
+Package situation:
+  System Python (C:\Python314)  : openai 2.51.0  INSTALLED
+  Venv (.venv)                  : openai          NOT INSTALLED
+
+The venv only has these packages installed:
+  annotated-types, anyio, certifi, colorama, distro, h11, httpcore,
+  httpx, idna, jiter, ollama, pip, pydantic, pydantic-core,
+  python-dotenv, sniffio, tqdm, typing-extensions, typing-inspection
+
+requirements (1).txt specifies: openai==2.41.1
+But it was never installed into the venv.
+
+IMPACT
+------
+1. brain.py fails to import — crash at line 1
+2. executive.py fails to import — cascade crash via brain.py
+3. Ag.py crashes at startup when the venv python is used
+4. test_brain.py exit code 1 (only test file that fails)
+5. All cloud brain functionality dead until fixed
+6. All brain mode functions dead (ask_brain, ask_cloud_direct, etc.)
+
+ADDITIONAL NOTE
+---------------
+When running with the SYSTEM python (python Ag.py), a different error
+occurs instead — see ERROR_002. Neither python environment can
+currently run Ag.py successfully from cold start without activation.
+
+FIX REQUIRED
+------------
+Install openai into the venv:
+  D:\AG\.venv\Scripts\pip.exe install openai==2.41.1

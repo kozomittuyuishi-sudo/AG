@@ -1,0 +1,77 @@
+ERROR ID     : ERROR_006
+DATE         : 2026-07-31
+SEVERITY     : LOW
+STATUS       : ACTIVE (cosmetic)
+CATEGORY     : Output Corruption / Subprocess
+
+TITLE
+-----
+Ollama local brain emits ANSI cursor-control escape codes into AG's response output
+
+AFFECTED FILE
+-------------
+  local_brain.py   ask_local_brain()   subprocess.run(["ollama", "run", ...])
+
+EXAMPLE OUTPUT (RAW)
+--------------------
+  [AG DEBUG] Local Brain Response Time: 2.21s
+  AG: Entropy is a measure of disorder or randomness in a system. In thermodynami
+  \u001B[12D\u001B[K
+  thermodynamics, it quantifies the amount of energy unavailable for doing us
+  \u001B[2D\u001B[K
+  useful work within a thermodynamic system.
+
+ESCAPE SEQUENCES OBSERVED
+--------------------------
+  \u001B[12D   Cursor Left 12 columns
+  \u001B[K     Erase to end of line
+  \u001B[2D    Cursor Left 2 columns
+  \u001B[1D    Cursor Left 1 column
+  \u001B[4D    Cursor Left 4 columns
+  (etc.)
+
+ROOT CAUSE
+----------
+Ollama's CLI (ollama run) detects that it is writing to a pipe (not a
+real terminal) and still emits ANSI escape sequences for its streaming
+progress display. These sequences are captured into result.stdout by
+subprocess.run(capture_output=True) and passed directly to Ag.py as
+the response text.
+
+The escape codes are rendered correctly on a real terminal but appear
+as literal garbage characters in:
+  - Piped output
+  - Log files
+  - Non-ANSI terminal emulators
+  - Stored memory entries (the raw bytes get stored in memory.json)
+
+MEMORY CONTAMINATION OBSERVED
+------------------------------
+In memory.json, stored entries show raw escape code artifacts:
+  "cloudbrainexploration": "Dive into how Alibaba Cloud Brain integrates
+   AI technologies for a\u001b[1D\u001b[K"
+  "kafka_franz": "Franz Kafka was a renowned German-language novelist of
+   the early 2\u001b[1D\u001b[K"
+
+The \u001b[...K sequences are being stored permanently in memory.json.
+
+IMPACT
+------
+- Visual corruption in terminal on non-ANSI-capable hosts
+- Corrupted text in memory.json for any facts stored from local brain
+- Corrupted summaries passed to cloud brain as context
+- Affects every local brain response turn
+
+FIX APPROACH (do not implement until Phase 2)
+---------------------------------------------
+Option A: Strip ANSI codes from subprocess output in local_brain.py
+  import re
+  def strip_ansi(text):
+      return re.sub(r'\x1B\[[0-9;]*[A-Za-z]', '', text)
+  reply = strip_ansi(result.stdout.strip())
+
+Option B: Switch from subprocess to the ollama Python library
+  (ollama==0.6.2 is already installed in the venv)
+  import ollama
+  response = ollama.chat(model='qwen2.5:3b', messages=[...])
+  reply = response['message']['content']

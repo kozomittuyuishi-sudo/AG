@@ -23,8 +23,14 @@ from brain import (
     load_brain_mode
 )
 
-
-dotenv.load_dotenv()
+# Load .env — check explicit .venv/.env location first (project default),
+# then fall back to the standard project-root .env if present.
+import os as _os
+_dotenv_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), '.venv', '.env')
+if _os.path.exists(_dotenv_path):
+    dotenv.load_dotenv(dotenv_path=_dotenv_path)
+else:
+    dotenv.load_dotenv()
 
 DEBUG_MODE = False
 
@@ -791,7 +797,12 @@ def main():
     working_memory.cache_decision("default_brain", load_brain_mode())
 
     while True:
-        user_input = input("You: ")
+        try:
+            user_input = input("You: ")
+        except EOFError:
+            print("\nAG: Input stream closed. Shutting down.")
+            print("AG: Memory preserved.")
+            break
         cleaned_input = user_input.strip().lower()
 
         if cleaned_input == "save last response":

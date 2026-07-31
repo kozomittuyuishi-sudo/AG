@@ -1,0 +1,49 @@
+PROJECT AB — ERROR LOG INDEX
+============================
+Folder  : D:\AG\errors_overtime\
+Updated : 2026-07-31
+Total   : 9 errors logged
+
+------------------------------------------------------------------------
+ID          SEVERITY   STATUS    TITLE
+------------------------------------------------------------------------
+ERROR_001   CRITICAL   ACTIVE    openai package not installed in venv
+ERROR_002   CRITICAL   ACTIVE    python-dotenv missing from system Python
+ERROR_003   HIGH       ACTIVE    Split package environment (venv vs system Python)
+ERROR_004   HIGH       ACTIVE    test_brain.py fails (cascade from ERROR_001)
+ERROR_005   CRITICAL   ACTIVE    Ag.py startup crash (cascade from ERROR_001)
+ERROR_006   LOW        ACTIVE    Ollama ANSI escape codes in response output
+ERROR_007   LOW        ACTIVE    Unhandled EOFError in main() input loop
+ERROR_008   MEDIUM     ACTIVE    Venv created from non-standard interpreter path
+ERROR_009   MEDIUM     ACTIVE    memory.json contaminated with ANSI escape sequences
+------------------------------------------------------------------------
+
+CRITICAL ERRORS (fix immediately to restore Ag.py operation)
+-------------------------------------------------------------
+ERROR_001 and ERROR_005 are the same root cause — openai not in venv.
+One pip install command fixes all CRITICAL errors:
+
+  D:\AG\.venv\Scripts\pip.exe install openai==2.41.1
+
+After that fix:
+  - brain.py imports successfully
+  - executive.py imports successfully
+  - Ag.py starts successfully
+  - test_brain.py passes
+  - All 14 test files will pass
+
+ERROR_002 is a separate issue affecting system python only.
+Fix by always using venv python (.venv\Scripts\python.exe) to run Ag.py.
+
+HIGH / MEDIUM ERRORS
+--------------------
+ERROR_003 and ERROR_008 are environment hygiene issues. No immediate
+code fix needed — just use the venv python consistently.
+
+ERROR_009 (memory.json contamination) requires a one-time data cleanup
+plus the ERROR_006 root cause fix. Deferred to Phase 2.
+
+LOW ERRORS (defer to Phase 2)
+------------------------------
+ERROR_006: Strip ANSI codes from Ollama subprocess output
+ERROR_007: Add EOFError guard to main() input loop

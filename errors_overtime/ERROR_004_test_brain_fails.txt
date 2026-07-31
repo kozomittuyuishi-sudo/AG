@@ -1,0 +1,48 @@
+ERROR ID     : ERROR_004
+DATE         : 2026-07-31
+SEVERITY     : HIGH
+STATUS       : ACTIVE
+CATEGORY     : Test Failure / Cascade from ERROR_001
+
+TITLE
+-----
+test_brain.py fails with ModuleNotFoundError (cascade from openai missing)
+
+AFFECTED FILE
+-------------
+  test_brain.py   line 1   from brain import (ask_brain, get_brain_status, load_brain_mode)
+
+FULL TRACEBACK
+--------------
+  Traceback (most recent call last):
+    File "D:\AG\test_brain.py", line 1, in <module>
+      from brain import (
+      ...
+      )
+    File "D:\AG\brain.py", line 1, in <module>
+      from openai import OpenAI
+  ModuleNotFoundError: No module named 'openai'
+
+TEST OUTPUT
+-----------
+  Exit code: 1
+  Stdout: (empty)
+
+ROOT CAUSE
+----------
+Direct cascade from ERROR_001. test_brain.py imports from brain.py,
+which requires openai. Since openai is not installed in the venv,
+the import fails before any test logic executes.
+
+This is the only test file that fails. All other 13 test files pass.
+
+IMPACT
+------
+- 1 of 14 test files fails (test_brain.py)
+- The actual brain test logic (load_brain_mode, get_brain_status,
+  ask_brain with local Ollama) is not executing at all
+
+FIX REQUIRED
+------------
+Same as ERROR_001 fix:
+  D:\AG\.venv\Scripts\pip.exe install openai==2.41.1

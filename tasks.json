@@ -1,9 +1,13 @@
 {
     "active": [
-        "finish task phrase expansion"
+        "verify cloud brain",
+        "write report",
+        "fix bug"
     ],
     "completed": [
         "implement task system",
-        "finish task phrase expansion"
+        "finish task phrase expansion",
+        "finish task phrase expansion",
+        "run regression validation"
     ]
 }

@@ -5,7 +5,13 @@ import time
 import os
 import json
 
-load_dotenv()
+# Load .env — check explicit .venv/.env location first (project default),
+# then fall back to the standard project-root .env if present.
+_dotenv_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.venv', '.env')
+if os.path.exists(_dotenv_path):
+    load_dotenv(dotenv_path=_dotenv_path)
+else:
+    load_dotenv()
 
 BRAIN_CONFIG_FILE = "brain_config.json"
 
@@ -145,7 +151,7 @@ def get_brain_status() -> str:
 
 def ask_cloud_brain(message) -> str:
     response = get_client().chat.completions.create(
-        model="tencent/hy3:free",
+        model="tencent/hy3",
         messages=[
             {"role": "system", "content": SYSTEM_PROMPT},
             {"role": "user", "content": message}

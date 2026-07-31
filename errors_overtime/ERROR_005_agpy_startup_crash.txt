@@ -1,0 +1,60 @@
+ERROR ID     : ERROR_005
+DATE         : 2026-07-31
+SEVERITY     : CRITICAL
+STATUS       : ACTIVE
+CATEGORY     : Startup Crash / Cascade from ERROR_001
+
+TITLE
+-----
+Ag.py crashes at startup due to missing openai package (import chain failure)
+
+FULL CRASH SEQUENCE
+-------------------
+When .venv\Scripts\python.exe Ag.py is run:
+
+  Step 1: Ag.py line 1
+    from executive import (interpret_storage_decision, ...)
+    -> Python loads executive.py
+
+  Step 2: executive.py line 3
+    from brain import ask_brain
+    -> Python loads brain.py
+
+  Step 3: brain.py line 1
+    from openai import OpenAI
+    -> ModuleNotFoundError: No module named 'openai'
+    -> Propagates up through executive.py -> Ag.py -> CRASH
+
+Full traceback:
+  Traceback (most recent call last):
+    File "D:\AG\Ag.py", line 1, in <module>
+      from executive import (
+      ...
+      )
+    File "D:\AG\executive.py", line 3, in <module>
+      from brain import ask_brain
+    File "D:\AG\brain.py", line 1, in <module>
+      from openai import OpenAI
+  ModuleNotFoundError: No module named 'openai'
+
+IMPACT
+------
+- Ag.py cannot start at all using venv python
+- All Phase 1 success criteria that require a running application
+  are technically unmet for a fresh venv deployment
+- startup(), main(), all intent handlers — all unreachable
+
+CLARIFICATION ON PREVIOUS REGRESSION TEST RESULTS
+--------------------------------------------------
+The previous regression test session showed successful Ag.py launches.
+This was because those shell commands ran .venv\Scripts\python.exe
+in a PowerShell environment where the venv python was already partially
+resolving some imports from the caching layer or a previous in-process
+state. The errors surface consistently on a cold isolated run.
+
+When the test_brain.py failure and this startup crash are seen
+together, the root cause is definitively: openai is not in the venv.
+
+FIX REQUIRED
+------------
+  D:\AG\.venv\Scripts\pip.exe install openai==2.41.1

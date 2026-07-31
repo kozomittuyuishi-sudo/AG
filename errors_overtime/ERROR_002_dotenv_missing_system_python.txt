@@ -1,0 +1,58 @@
+ERROR ID     : ERROR_002
+DATE         : 2026-07-31
+SEVERITY     : CRITICAL
+STATUS       : ACTIVE
+CATEGORY     : Missing Package / ModuleNotFoundError
+
+TITLE
+-----
+python-dotenv package is not installed in the system Python (C:\Python314)
+
+AFFECTED FILES
+--------------
+  brain.py      line 2     from dotenv import load_dotenv
+  Ag.py         line 14    import dotenv
+
+FULL TRACEBACK
+--------------
+When running with python (system: C:\Python314\python.exe):
+
+  Traceback (most recent call last):
+    File "D:\AG\Ag.py", line 1, in <module>
+      from executive import (...)
+    File "D:\AG\executive.py", line 3, in <module>
+      from brain import ask_brain
+    File "D:\AG\brain.py", line 2, in <module>
+      from dotenv import load_dotenv
+  ModuleNotFoundError: No module named 'dotenv'
+
+ROOT CAUSE
+----------
+System Python (C:\Python314) does not have python-dotenv installed.
+
+  System Python packages: openai is present, but python-dotenv is ABSENT
+  Venv packages         : python-dotenv 1.2.2 is present, but openai is ABSENT
+
+The two Python environments have complementary but non-overlapping gaps:
+  - System Python has openai but not dotenv
+  - Venv has dotenv but not openai
+
+Neither environment is complete enough to run Ag.py.
+
+requirements (1).txt specifies: python-dotenv==1.2.2
+
+IMPACT
+------
+1. brain.py fails to import under system Python
+2. All of Ag.py fails to start under system Python
+3. OPENROUTER_API_KEY will never be loaded even if openai is present
+
+FIX REQUIRED
+------------
+Install python-dotenv into the system Python (if using system python):
+  python -m pip install python-dotenv==1.2.2
+
+OR (preferred) install all requirements into the venv and always use
+the venv python to run Ag.py:
+  D:\AG\.venv\Scripts\pip.exe install openai==2.41.1
+  (python-dotenv is already in venv)

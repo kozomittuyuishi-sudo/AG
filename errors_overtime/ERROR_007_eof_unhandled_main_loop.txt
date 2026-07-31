@@ -1,0 +1,55 @@
+ERROR ID     : ERROR_007
+DATE         : 2026-07-31
+SEVERITY     : LOW
+STATUS       : ACTIVE (non-interactive only)
+CATEGORY     : Exception Handling / Input Loop
+
+TITLE
+-----
+Unhandled EOFError in main() when stdin is exhausted or piped input ends
+
+AFFECTED FILE
+-------------
+  Ag.py   main()   line ~800   user_input = input("You: ")
+
+FULL TRACEBACK (when stdin closes)
+------------------------------------
+  Traceback (most recent call last):
+    File "D:\AG\Ag.py", line 1098, in <module>
+      main()
+    File "D:\AG\Ag.py", line 800, in main
+      user_input = input("You: ")
+  EOFError: EOF when reading a line
+
+REPRODUCTION
+------------
+  echo "hello" | .venv\Scripts\python.exe Ag.py
+  (any piped input that ends before the loop reaches an explicit exit)
+
+ROOT CAUSE
+----------
+input() raises EOFError when stdin reaches end-of-file. The while True
+loop in main() has no try/except around input() to handle this case.
+The loop only exits via:
+  1. detect_intent returning "shutdown" (requires user to type exit/quit)
+  2. The pending shutdown confirmation path breaking out of the loop
+
+Neither path executes when stdin closes unexpectedly.
+
+IMPACT
+------
+- Non-interactive use (scripts, piped input, automated testing) always
+  crashes with a traceback instead of a clean exit
+- Affects CI/CD pipeline runs, scripted regression tests
+- Does NOT affect normal interactive terminal use
+
+FIX APPROACH (do not implement until Phase 2)
+---------------------------------------------
+Wrap the input() call:
+
+  try:
+      user_input = input("You: ")
+  except EOFError:
+      print("\nAG: Input stream closed. Shutting down.")
+      print("AG: Memory preserved.")
+      break

@@ -33,3 +33,120 @@
 {"timestamp": "2026-07-09T13:16:41.067250+00:00", "event_type": "user_input_received", "payload": {"text": "shutdown"}}
 {"timestamp": "2026-07-09T13:16:45.778970+00:00", "event_type": "storage_operation", "payload": {"operation": "store_discussion", "category": "testing", "key": "gravity"}}
 {"timestamp": "2026-07-30T15:29:11.602815+00:00", "event_type": "user_input_received", "payload": {"text": "hey you working properly!?"}}
+{"timestamp": "2026-07-31T11:58:30.013415+00:00", "event_type": "user_input_received", "payload": {"text": "hello"}}
+{"timestamp": "2026-07-31T11:58:30.016477+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T11:59:44.895743+00:00", "event_type": "user_input_received", "payload": {"text": "what is 2 plus 2"}}
+{"timestamp": "2026-07-31T12:00:18.310495+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "2 plus 2"}}
+{"timestamp": "2026-07-31T12:00:18.311112+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:01:18.795658+00:00", "event_type": "user_input_received", "payload": {"text": "cloud what is the capital of France"}}
+{"timestamp": "2026-07-31T12:01:21.225767+00:00", "event_type": "brain_response_completed", "payload": {"intent": "cloud_brain", "topic": "what is the capital of France"}}
+{"timestamp": "2026-07-31T12:01:21.226399+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:05:42.317475+00:00", "event_type": "user_input_received", "payload": {"text": "hello"}}
+{"timestamp": "2026-07-31T12:05:42.318905+00:00", "event_type": "user_input_received", "payload": {"text": "brain status"}}
+{"timestamp": "2026-07-31T12:05:42.319794+00:00", "event_type": "user_input_received", "payload": {"text": "what is entropy?"}}
+{"timestamp": "2026-07-31T12:05:44.530546+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "entropy?"}}
+{"timestamp": "2026-07-31T12:05:44.531113+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:19:40.870732+00:00", "event_type": "user_input_received", "payload": {"text": "hello"}}
+{"timestamp": "2026-07-31T12:19:40.872250+00:00", "event_type": "user_input_received", "payload": {"text": "brain status"}}
+{"timestamp": "2026-07-31T12:19:40.873156+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:19:57.811061+00:00", "event_type": "user_input_received", "payload": {"text": "remember validation is complete"}}
+{"timestamp": "2026-07-31T12:19:57.813075+00:00", "event_type": "user_input_received", "payload": {"text": "what is validation"}}
+{"timestamp": "2026-07-31T12:19:57.813602+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "validation"}}
+{"timestamp": "2026-07-31T12:19:57.814163+00:00", "event_type": "user_input_received", "payload": {"text": "show memory"}}
+{"timestamp": "2026-07-31T12:19:57.814916+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:20:07.785173+00:00", "event_type": "user_input_received", "payload": {"text": "add task run regression validation"}}
+{"timestamp": "2026-07-31T12:20:07.786714+00:00", "event_type": "task_operation", "payload": {"operation": "add_task", "task": "run regression validation"}}
+{"timestamp": "2026-07-31T12:20:07.787516+00:00", "event_type": "user_input_received", "payload": {"text": "add task verify cloud brain"}}
+{"timestamp": "2026-07-31T12:20:07.788540+00:00", "event_type": "task_operation", "payload": {"operation": "add_task", "task": "verify cloud brain"}}
+{"timestamp": "2026-07-31T12:20:07.789071+00:00", "event_type": "user_input_received", "payload": {"text": "show tasks"}}
+{"timestamp": "2026-07-31T12:20:07.789777+00:00", "event_type": "user_input_received", "payload": {"text": "complete task 1"}}
+{"timestamp": "2026-07-31T12:20:07.790859+00:00", "event_type": "task_operation", "payload": {"operation": "complete_task", "task": "finish task phrase expansion"}}
+{"timestamp": "2026-07-31T12:20:07.791419+00:00", "event_type": "user_input_received", "payload": {"text": "show completed tasks"}}
+{"timestamp": "2026-07-31T12:20:07.791965+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:20:16.144720+00:00", "event_type": "user_input_received", "payload": {"text": "project status"}}
+{"timestamp": "2026-07-31T12:20:16.170355+00:00", "event_type": "user_input_received", "payload": {"text": "what am i building"}}
+{"timestamp": "2026-07-31T12:20:16.171645+00:00", "event_type": "user_input_received", "payload": {"text": "current version"}}
+{"timestamp": "2026-07-31T12:20:16.172565+00:00", "event_type": "user_input_received", "payload": {"text": "what is next"}}
+{"timestamp": "2026-07-31T12:20:16.173452+00:00", "event_type": "user_input_received", "payload": {"text": "completed milestones"}}
+{"timestamp": "2026-07-31T12:20:16.174267+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:20:23.549490+00:00", "event_type": "user_input_received", "payload": {"text": "switch to local brain"}}
+{"timestamp": "2026-07-31T12:20:23.550385+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T12:20:23.551601+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "local"}}
+{"timestamp": "2026-07-31T12:20:23.552198+00:00", "event_type": "user_input_received", "payload": {"text": "brain status"}}
+{"timestamp": "2026-07-31T12:20:23.571068+00:00", "event_type": "user_input_received", "payload": {"text": "switch to cloud brain"}}
+{"timestamp": "2026-07-31T12:20:23.571927+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T12:20:23.572725+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "cloud"}}
+{"timestamp": "2026-07-31T12:20:23.573610+00:00", "event_type": "user_input_received", "payload": {"text": "brain status"}}
+{"timestamp": "2026-07-31T12:20:23.592586+00:00", "event_type": "user_input_received", "payload": {"text": "switch to auto brain"}}
+{"timestamp": "2026-07-31T12:20:23.593682+00:00", "event_type": "user_input_received", "payload": {"text": "brain status"}}
+{"timestamp": "2026-07-31T12:20:23.610731+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:20:33.978215+00:00", "event_type": "user_input_received", "payload": {"text": "switch to local brain"}}
+{"timestamp": "2026-07-31T12:20:33.979018+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T12:20:33.979834+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "local"}}
+{"timestamp": "2026-07-31T12:20:33.980253+00:00", "event_type": "user_input_received", "payload": {"text": "what is the speed of light?"}}
+{"timestamp": "2026-07-31T12:20:35.465933+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "the speed of light?"}}
+{"timestamp": "2026-07-31T12:20:35.466738+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:20:43.255243+00:00", "event_type": "user_input_received", "payload": {"text": "switch to cloud brain"}}
+{"timestamp": "2026-07-31T12:20:43.256104+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T12:20:43.257032+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "cloud"}}
+{"timestamp": "2026-07-31T12:20:43.257764+00:00", "event_type": "user_input_received", "payload": {"text": "what is entropy?"}}
+{"timestamp": "2026-07-31T12:21:01.657826+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "entropy?"}}
+{"timestamp": "2026-07-31T12:21:01.658844+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:22:49.827006+00:00", "event_type": "user_input_received", "payload": {"text": "switch to auto brain"}}
+{"timestamp": "2026-07-31T12:22:49.829040+00:00", "event_type": "user_input_received", "payload": {"text": "cloud what is photosynthesis in one sentence?"}}
+{"timestamp": "2026-07-31T12:23:00.965285+00:00", "event_type": "brain_response_completed", "payload": {"intent": "cloud_brain", "topic": "what is photosynthesis in one sentence?"}}
+{"timestamp": "2026-07-31T12:23:00.966036+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:23:14.786739+00:00", "event_type": "user_input_received", "payload": {"text": "switch to local brain"}}
+{"timestamp": "2026-07-31T12:23:14.787488+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T12:23:14.788373+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "local"}}
+{"timestamp": "2026-07-31T12:23:14.788787+00:00", "event_type": "user_input_received", "payload": {"text": "what is quantum entanglement?"}}
+{"timestamp": "2026-07-31T12:23:18.109838+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "quantum entanglement?"}}
+{"timestamp": "2026-07-31T12:23:18.110458+00:00", "event_type": "user_input_received", "payload": {"text": "tell me more"}}
+{"timestamp": "2026-07-31T12:23:18.111015+00:00", "event_type": "topic_continuation_detected", "payload": {"original_input": "tell me more", "resolved_input": "tell me more (about quantum entanglement?)", "topic": "quantum entanglement?"}}
+{"timestamp": "2026-07-31T12:23:23.934620+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "tell me more"}}
+{"timestamp": "2026-07-31T12:23:23.935351+00:00", "event_type": "user_input_received", "payload": {"text": "why"}}
+{"timestamp": "2026-07-31T12:23:23.935947+00:00", "event_type": "topic_continuation_detected", "payload": {"original_input": "why", "resolved_input": "why (about tell me more)", "topic": "tell me more"}}
+{"timestamp": "2026-07-31T12:23:25.691341+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "why"}}
+{"timestamp": "2026-07-31T12:23:25.692238+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:24:16.560587+00:00", "event_type": "user_input_received", "payload": {"text": "switch to local brain"}}
+{"timestamp": "2026-07-31T12:24:16.561334+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T12:24:16.562191+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "local"}}
+{"timestamp": "2026-07-31T12:24:16.562633+00:00", "event_type": "user_input_received", "payload": {"text": "what is the boiling point of water?"}}
+{"timestamp": "2026-07-31T12:24:18.547094+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "the boiling point of water?"}}
+{"timestamp": "2026-07-31T12:24:18.547804+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:24:43.641275+00:00", "event_type": "user_input_received", "payload": {"text": "what do you remember about gravity"}}
+{"timestamp": "2026-07-31T12:24:43.642404+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "what do you remember about gravity"}}
+{"timestamp": "2026-07-31T12:24:43.643091+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:24:51.698426+00:00", "event_type": "user_input_received", "payload": {"text": "use cloud brain for this question"}}
+{"timestamp": "2026-07-31T12:24:51.699100+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_routing", "operation": "temporary_brain_use"}}
+{"timestamp": "2026-07-31T12:25:01.140851+00:00", "event_type": "temporary_brain_used", "payload": {"target": "cloud", "resolved_query": "this question", "previous_mode": "local"}}
+{"timestamp": "2026-07-31T12:25:01.141614+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T12:51:27.278490+00:00", "event_type": "user_input_received", "payload": {"text": "hello"}}
+{"timestamp": "2026-07-31T12:51:27.278977+00:00", "event_type": "task_operation", "payload": {"operation": "add_task", "task": "test"}}
+{"timestamp": "2026-07-31T12:52:14.633331+00:00", "event_type": "task_operation", "payload": {"operation": "add_task", "task": "write report"}}
+{"timestamp": "2026-07-31T12:52:14.634112+00:00", "event_type": "task_operation", "payload": {"operation": "complete_task", "task": "run regression validation"}}
+{"timestamp": "2026-07-31T12:52:14.636862+00:00", "event_type": "task_operation", "payload": {"operation": "add_task", "task": "fix bug"}}
+{"timestamp": "2026-07-31T12:52:14.637796+00:00", "event_type": "storage_operation", "payload": {"operation": "store_answer", "category": "general", "key": "what is gravity"}}
+{"timestamp": "2026-07-31T12:52:14.638640+00:00", "event_type": "storage_operation", "payload": {"operation": "store_discussion", "category": "general", "key": "what_is_gravity"}}
+{"timestamp": "2026-07-31T13:16:29.610055+00:00", "event_type": "user_input_received", "payload": {"text": "hello"}}
+{"timestamp": "2026-07-31T13:16:36.206727+00:00", "event_type": "user_input_received", "payload": {"text": "hello"}}
+{"timestamp": "2026-07-31T13:16:36.207690+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T13:17:43.129895+00:00", "event_type": "user_input_received", "payload": {"text": "switch to local brain"}}
+{"timestamp": "2026-07-31T13:17:43.130520+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T13:17:43.131183+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "local"}}
+{"timestamp": "2026-07-31T13:17:43.131623+00:00", "event_type": "user_input_received", "payload": {"text": "what is gravity in one sentence?"}}
+{"timestamp": "2026-07-31T13:17:44.126032+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "gravity in one sentence?"}}
+{"timestamp": "2026-07-31T13:17:44.126639+00:00", "event_type": "user_input_received", "payload": {"text": "exit"}}
+{"timestamp": "2026-07-31T13:55:28.105821+00:00", "event_type": "user_input_received", "payload": {"text": "brain status"}}
+{"timestamp": "2026-07-31T13:55:35.814321+00:00", "event_type": "user_input_received", "payload": {"text": "switch to cloud brain"}}
+{"timestamp": "2026-07-31T13:55:35.815041+00:00", "event_type": "action_pattern_detected", "payload": {"action_type": "brain_mode_change", "operation": "set_default_brain"}}
+{"timestamp": "2026-07-31T13:55:35.815949+00:00", "event_type": "brain_mode_changed", "payload": {"mode": "cloud"}}
+{"timestamp": "2026-07-31T13:55:48.014426+00:00", "event_type": "user_input_received", "payload": {"text": "remember my favourite color is blue"}}
+{"timestamp": "2026-07-31T13:55:56.008580+00:00", "event_type": "user_input_received", "payload": {"text": "what is my favourite color"}}
+{"timestamp": "2026-07-31T13:55:56.009432+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "my favourite color"}}
+{"timestamp": "2026-07-31T13:56:03.837072+00:00", "event_type": "user_input_received", "payload": {"text": "What is entropy?"}}
+{"timestamp": "2026-07-31T13:56:22.717805+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "entropy?"}}
+{"timestamp": "2026-07-31T13:56:42.672545+00:00", "event_type": "user_input_received", "payload": {"text": "Who is Albert Einstein?"}}
+{"timestamp": "2026-07-31T13:56:59.331894+00:00", "event_type": "brain_response_completed", "payload": {"intent": "recall", "topic": "Albert Einstein?"}}
+{"timestamp": "2026-07-31T13:57:22.029035+00:00", "event_type": "user_input_received", "payload": {"text": "Where did he work?When was he born?"}}
+{"timestamp": "2026-07-31T13:57:28.555810+00:00", "event_type": "brain_response_completed", "payload": {"intent": "unknown", "topic": "Where did he work?When was he born?"}}
