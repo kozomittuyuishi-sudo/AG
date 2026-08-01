@@ -16,7 +16,10 @@ Boundaries:
 """
 
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
+# Type alias: return type for evaluate_category_decision
+Tuple_Cat_Decision = Any
 
 
 class ExecutiveDecision:
@@ -138,7 +141,3 @@ class ExecutiveLayer:
             memory_entry=memory_entry,
             metadata={"processed_mode": mode}
         )
-
-
-# Helper type alias
-Tuple_Cat_Decision = Any

@@ -18,7 +18,10 @@ Boundaries:
 from copy import deepcopy
 from datetime import datetime, timezone
 import re
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Optional
+
+# Type alias: return type for extract_action_intent
+Tuple_Action_Flag = Any
 
 
 class ProcessedResponse:
@@ -144,7 +147,3 @@ class ResponseProcessor:
             fallback_triggered=False,
             raw_brain_id=brain_id
         )
-
-
-# Helper type alias for internal clarity
-Tuple_Action_Flag = Any

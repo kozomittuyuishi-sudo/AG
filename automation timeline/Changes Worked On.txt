@@ -86,3 +86,82 @@ Phase 1: COMPLETE AND STABLE
 Phase 2: READY TO BEGIN
 
 ================================================================================
+
+
+
+================================================================================
+CHANGES WORKED ON — 2026-08-01
+================================================================================
+
+Project: Ambient Guidance (AG)
+Phase: Phase 0 Stabilization — Pytest Collection Error Resolution
+Engineer: Kiro (AI Lead Engineer)
+
+--------------------------------------------------------------------------------
+TASKS COMPLETED
+--------------------------------------------------------------------------------
+
+[1] FIXED — NameError: Tuple_Cat_Decision (executive_layer.py)
+    Root Cause: Type alias `Tuple_Cat_Decision = Any` was defined at the bottom
+    of the file (line 144), after class ExecutiveLayer which used it as a return
+    type annotation at line 79. Python evaluates annotations at class-definition
+    time during import, so the name was unbound at collection time.
+    Fix: Moved alias to module level immediately after the `from typing import`
+    statement (before any class definition). Removed the misplaced bottom entry.
+    Also removed unused `List` from typing import (hygiene).
+    File modified: executive_layer.py
+
+[2] FIXED — NameError: Tuple_Action_Flag (response_processor.py)
+    Root Cause: Type alias `Tuple_Action_Flag = Any` was defined at the bottom
+    of the file (line 150), after class ResponseProcessor which used it as a
+    return type annotation at line 85. Same root cause as above.
+    Fix: Moved alias to module level immediately after the `from typing import`
+    statement (before any class definition). Removed the misplaced bottom entry.
+    Also removed unused `List` from typing import (hygiene).
+    File modified: response_processor.py
+
+--------------------------------------------------------------------------------
+FILES MODIFIED
+--------------------------------------------------------------------------------
+
+  executive_layer.py
+    - Moved Tuple_Cat_Decision = Any to module level (before class)
+    - Removed duplicate alias from end of file
+    - Removed unused `List` from typing import
+
+  response_processor.py
+    - Moved Tuple_Action_Flag = Any to module level (before class)
+    - Removed duplicate alias from end of file
+    - Removed unused `List` from typing import
+
+--------------------------------------------------------------------------------
+VALIDATION PERFORMED
+--------------------------------------------------------------------------------
+
+  pytest --collect-only
+    Result: 98 tests collected, exit code 0
+    No collection errors.
+
+  pytest -v
+    Result: 98 passed in 4.94s, exit code 0
+    All 98 tests passing. No regressions.
+
+  Test files exercising fixed modules:
+    test_executive_layer.py    3 tests   PASS
+    test_response_processor.py 3 tests   PASS
+    test_ag_pipeline.py        7 tests   PASS  (integration — uses both modules)
+
+--------------------------------------------------------------------------------
+REMAINING ISSUES
+--------------------------------------------------------------------------------
+
+  None. All collection errors resolved. Full suite green.
+
+--------------------------------------------------------------------------------
+PHASE STATUS
+--------------------------------------------------------------------------------
+
+Phase 0 Stabilization: COMPLETE
+Phase 1 (prior): STABLE (no regressions)
+
+================================================================================

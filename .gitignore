@@ -14,3 +14,4 @@ kiro-cli.exe
 data/warehouse/
 .vscode/
 .idea/
+.aider*
