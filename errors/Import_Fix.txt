@@ -1,0 +1,5 @@
+Files modified: configuration/brain-registry.JSON → brain_registry.json, configuration/permissions.JSON → permissions.json (renames only; no code changes)
+Issues resolved: Issue 1 — brain_registry.json filename mismatch; Issue 2 — permissions.json filename mismatch (both now match control_layer.py constants exactly)
+Validation: pytest — 435 passed, 1 failed; failure is test_ag.py::test_complete_task (pre-existing assertion mismatch on task-completion string, unrelated to this fix)
+Remaining concerns: runtime/development_manager.py — empty stub (0 bytes), not imported anywhere; intentionally retained by project decision
+No code was modified; no logic was changed; no new behaviour introduced

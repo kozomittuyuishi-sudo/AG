@@ -50,11 +50,6 @@ from pipeline.fallback_classifier import (
     DIR_OUT_OF_WORKSPACE,
 )
 from pipeline.intent_router import classify as _route_intent, Intent
-from preprocessor_brain import PreprocessorBrain, Domain as _PBDomain
-from quips import (
-    QUIPSResult, RequestUnit, RoutingDecision, UnitProcessingResult,
-    analyze_request,
-)
 import json
 import os
 import subprocess
@@ -896,112 +891,6 @@ def detect_intent(user_input):
 
 
 
-def _format_preprocessor_directory_result(pb_result) -> str:
-    """
-    Convert a PreprocessorResult (domain=DIRECTORY) into an AG-prefixed
-    human-readable string.
-
-    This is the ONLY place in Ag.py that renders PreprocessorBrain directory
-    results. Filesystem errors remain in the DIRECTORY error domain.
-    Brain errors, preprocessing errors, and self-info errors are kept separate.
-    """
-    from preprocessor_brain import Intent as _PBIntent, DirErrorCode
-
-    if not pb_result.success:
-        code = pb_result.error or "ERROR"
-        meta = pb_result.metadata or {}
-
-        # Clarification needed (ambiguous request or incomplete command)
-        if code == DirErrorCode.AMBIGUOUS_REQUEST:
-            msg = meta.get("message") or "I couldn't determine a specific file/directory operation from that request."
-            missing = meta.get("missing_fields")
-            if missing:
-                msg += f" Missing: {', '.join(missing)}."
-            return "AG: " + msg
-
-        # Capability not available
-        if code == DirErrorCode.CAPABILITY_UNAVAILABLE:
-            cap_desc = meta.get("capability_description", "")
-            return "AG: " + (cap_desc or "That directory operation is not available.")
-
-        # Filesystem errors — keep in DIRECTORY domain
-        friendly = {
-            DirErrorCode.NOT_FOUND:           "File or directory not found.",
-            DirErrorCode.NOT_A_FILE:           "Path is a directory, not a file.",
-            DirErrorCode.NOT_A_DIRECTORY:      "Path is a file, not a directory.",
-            DirErrorCode.SOURCE_MISSING:       "Source does not exist.",
-            DirErrorCode.OUT_OF_WORKSPACE:     "Path is outside the active workspace boundary.",
-            DirErrorCode.NO_ACTIVE_WORKSPACE:  "No active workspace is set. Use 'work in <path>' or 'switch to <path>' to set one.",
-            DirErrorCode.ALREADY_EXISTS:       "Already exists.",
-            DirErrorCode.OPERATION_FAILED:     "The directory operation failed.",
-        }
-        internal = meta.get("internal_message", "")
-        base = friendly.get(code, f"Directory error: {code}.")
-        if internal and internal != base:
-            return f"AG: {base} ({internal})"
-        return "AG: " + base
-
-    # Success — format based on intent
-    intent = pb_result.intent
-    result = pb_result.result
-
-    if intent == _PBIntent.CURRENT_DIRECTORY:
-        return f"AG: Active workspace: {result}"
-
-    if intent == _PBIntent.LIST_DIRECTORY:
-        if not result:
-            return "AG: The directory is empty."
-        lines = []
-        for e in result:
-            marker = "[D]" if e.get("type") == "dir" else "[F]"
-            size = f"  ({e['size_bytes']} B)" if e.get("type") == "file" else ""
-            lines.append(f"  {marker} {e['name']}{size}")
-        target = pb_result.target or "."
-        header = f"Contents of {target}:" if target and target != "." else "Directory contents:"
-        # If we have an active workspace path, show it
-        return "AG: " + header + "\n" + "\n".join(lines)
-
-    if intent == _PBIntent.READ_FILE:
-        target = pb_result.target or "file"
-        return f"AG: Contents of {target}:\n\n{result}"
-
-    if intent == _PBIntent.CREATE_FILE:
-        return f"AG: File created: {result}"
-
-    if intent == _PBIntent.CREATE_FOLDER:
-        return f"AG: Folder created: {result}"
-
-    if intent == _PBIntent.WRITE_FILE:
-        return f"AG: Written to: {result}"
-
-    if intent == _PBIntent.APPEND_FILE:
-        return f"AG: Appended to: {result}"
-
-    if intent == _PBIntent.SWITCH_DIRECTORY:
-        return f"AG: Active workspace switched to: {result}"
-
-    if intent == _PBIntent.RENAME:
-        return f"AG: Renamed to: {result}"
-
-    if intent == _PBIntent.COPY:
-        return f"AG: Copied to: {result}"
-
-    if intent == _PBIntent.MOVE:
-        return f"AG: Moved to: {result}"
-
-    if intent == _PBIntent.SEARCH:
-        if not result:
-            return "AG: No files found matching that pattern."
-        lines = [f"  {e['rel_path']}" for e in result[:50]]
-        extra = f"\n  ... and {len(result) - 50} more." if len(result) > 50 else ""
-        return "AG: Search results:\n" + "\n".join(lines) + extra
-
-    # Generic fallback
-    if result is not None:
-        return "AG: " + str(result)
-    return "AG: Operation completed."
-
-
 def process_input(
     user_input,
     memory,
@@ -1018,69 +907,7 @@ def process_input(
     self_info_engine=None,
     directory_session=None,
     directory_control=None,
-    preprocessor_brain=None,
-    quips_result: Optional[QUIPSResult] = None,
-    request_unit: Optional[RequestUnit] = None,
 ):
-    # QUIPS is structural only.  For a compound request, preserve every
-    # independently identified unit by routing each through this existing
-    # function.  Single requests keep the legacy path unchanged.
-    if quips_result is not None and quips_result.is_compound:
-        responses = []
-        unit_results = []
-        for unit in quips_result.requests:
-            unit_intent = unit.legacy_intent or detect_intent(unit.text)
-            try:
-                responses.append(process_input(
-                unit.text, memory, tasks, unit_intent,
-                introspection_engine=introspection_engine,
-                conversation_manager=conversation_manager,
-                entity_tracker=entity_tracker,
-                reference_resolver=reference_resolver,
-                executive_layer=executive_layer,
-                brain_dispatcher=brain_dispatcher,
-                response_processor=response_processor,
-                adaptive_cloud_brain=adaptive_cloud_brain,
-                self_info_engine=self_info_engine,
-                directory_session=directory_session,
-                directory_control=directory_control,
-                preprocessor_brain=preprocessor_brain,
-                request_unit=unit,
-                ))
-                unit_results.append(UnitProcessingResult(
-                    unit_index=unit.index,
-                    handler=unit.routing_decision,
-                    status="COMPLETED",
-                ))
-            except Exception as exc:
-                # Each unit is isolated: later requests remain routable.
-                log_event("quips_unit_failure", {"unit": unit.to_dict(), "error": str(exc)})
-                responses.append("AG: I couldn't complete this part of the request.")
-                unit_results.append(UnitProcessingResult(
-                    unit_index=unit.index,
-                    handler=unit.routing_decision,
-                    status="FAILED",
-                    error=str(exc),
-                ))
-        log_event("quips_compound_completed", {
-            "original_text": quips_result.original_text,
-            "unit_results": [result.to_dict() for result in unit_results],
-        })
-        return "\n\n".join(responses)
-
-    if (
-        request_unit is not None
-        and request_unit.routing_decision == RoutingDecision.DETERMINISTIC_SELF_INFO
-        and preprocessor_brain is not None
-    ):
-        _pb_result = preprocessor_brain.process_self_info_intent(
-            request_unit.intent, request_unit.original_text)
-        if _pb_result.success and _pb_result.result:
-            log_event("quips_unit_routed", {
-                "unit": request_unit.to_dict(), "handler": "PreprocessorBrain", "result": "deterministic",
-            })
-            return "AG: " + str(_pb_result.result)
-
     context = analyze_context(user_input, intent)
     plan = build_execution_plan(user_input, intent)
 
@@ -1090,43 +917,6 @@ def process_input(
 
     if intent == "shutdown":
         return "shutdown"
-
-    # ---- PREPROCESSOR BRAIN INTERCEPT ------------------------------------
-    # Runs BEFORE all other dispatch. Handles SELF_INFO and DIRECTORY
-    # requests deterministically without an LLM call.
-    # GENERAL_LLM and UNKNOWN pass through to the existing brain path.
-    # All other (memory, tasks, project, brain-mode) intents bypass this
-    # entirely — the preprocessor only intercepts what it is authoritative for.
-    if preprocessor_brain is not None and intent not in (
-        "shutdown", "remember", "recall", "greeting", "show_memory",
-        "open_memory_file", "project_status", "project_name", "next_step",
-        "completed_milestones", "add_task", "show_tasks", "complete_task",
-        "show_completed_tasks", "current_version", "brain_status",
-        "set_brain_local", "set_brain_cloud", "set_brain_auto",
-        "cloud_brain", "read_directory", "clear_directory",
-    ):
-        try:
-            _pb_result = preprocessor_brain.process(user_input)
-
-            if _pb_result.domain == _PBDomain.SELF_INFO and not _pb_result.requires_llm:
-                # Preprocessor answered a self-info query — return directly.
-                if _pb_result.success and _pb_result.result:
-                    return "AG: " + str(_pb_result.result)
-                # Preprocessor flagged self-info but couldn't answer — fall through.
-
-            elif _pb_result.domain == _PBDomain.DIRECTORY and not _pb_result.requires_llm:
-                # Preprocessor handled a directory operation — convert result.
-                return _format_preprocessor_directory_result(_pb_result)
-
-            # GENERAL_LLM or UNKNOWN: requires_llm=True → fall through to
-            # existing brain path below (no early return here).
-
-        except Exception as _pb_exc:
-            # Preprocessor error must NEVER crash the main loop.
-            if DEBUG_MODE:
-                print(f"[AG DEBUG] PreprocessorBrain error: {_pb_exc}")
-            # Fall through to existing handling.
-    # ---- END PREPROCESSOR BRAIN INTERCEPT --------------------------------
 
     # ---- Intent Router short-circuit: LOCAL_STATE_QUERY answered in-memory ----
     # This runs before all other dispatch so that active-directory queries
@@ -2081,13 +1871,9 @@ def main():
     _directory_control    = DirectoryControl()
 
     # Build IntrospectionEngine with all subsystems registered
-    # project_context.json is the authoritative version source used by the
-    # self-info model.  Keep the runtime snapshot aligned with it.
-    _project_context = load_project_context() or {}
-    _project_version = str(_project_context.get("current_version", "UNKNOWN"))
     _builder_config = SnapshotBuilderConfig(
         identity_name="AG",
-        identity_version=_project_version.lstrip("vV"),
+        identity_version="0.4.0",
         module_prefix_filter="",
         configuration_summary={
             "brain_mode": load_brain_mode(),
@@ -2109,15 +1895,6 @@ def main():
     )
     # Replace the engine's registry with the fully populated one
     _introspection_engine._registry = _registry
-
-    # ---- Preprocessor Brain -------------------------------------------
-    # Initialized AFTER IntrospectionEngine so it receives the live engine
-    # as its introspection_source. DirectoryControl is passed directly so
-    # capability checks reflect the real filesystem backend.
-    _preprocessor_brain = PreprocessorBrain(
-        directory_control=_directory_control,
-        introspection_source=_introspection_engine,
-    )
 
     while True:
         try:
@@ -2333,12 +2110,9 @@ def main():
             continue
 
         log_event("user_input_received", {"text": user_input})
-        quips_result = analyze_request(user_input, detect_intent)
-        log_event("quips_request_analysis", quips_result.to_dict())
-
         action_result = analyze_action_pattern(user_input, working_memory)
 
-        if action_result["is_action_request"] and not quips_result.is_compound:
+        if action_result["is_action_request"]:
             action = action_result["actions"][0]
             log_event("action_pattern_detected", {
                 "action_type": action["action_type"],
@@ -2364,11 +2138,7 @@ def main():
                 continue
 
         original_input = user_input
-        request_unit = quips_result.requests[0]
-        # QUIPS always invokes detect_intent and preserves its result on the
-        # unit.  For single requests this retains legacy routing unchanged;
-        # deterministic ownership is applied in process_input from the unit.
-        intent = request_unit.legacy_intent or detect_intent(user_input)
+        intent = detect_intent(user_input)
         brain_input = user_input
 
         if intent == "unknown":
@@ -2408,9 +2178,6 @@ def main():
             self_info_engine=_self_info_engine,
             directory_session=_directory_session,
             directory_control=_directory_control,
-            preprocessor_brain=_preprocessor_brain,
-            quips_result=quips_result,
-            request_unit=request_unit,
         )
 
         if response == "shutdown":

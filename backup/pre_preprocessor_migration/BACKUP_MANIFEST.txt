@@ -1,0 +1,39 @@
+BACKUP: pre_preprocessor_migration
+Created: 2026-08-10T18:39:50+05:30
+Purpose: State of AG BEFORE Preprocessor Brain migration.
+         DO NOT modify, delete, or overwrite.
+         This is the rollback point.
+
+FILES BACKED UP
+===============
+
+directory_control/
+  directory_control.py   28006 bytes  (Aug 09 06:51)
+  __init__.py             1344 bytes  (Aug 09 03:57)
+  path_security.py        4806 bytes  (Aug 09 03:52)
+
+pipeline/
+  fallback_classifier.py 14042 bytes  (Aug 09 06:51)
+  __init__.py              722 bytes  (Aug 08 14:39)
+  intent_router.py        16010 bytes  (Aug 09 07:07)
+  nl_entity_extractor.py  13635 bytes  (Aug 09 07:00)
+  ag_pipeline.py           9287 bytes  (Aug 08 14:37)
+
+Ag.py                     81813 bytes  (Aug 09 12:38)
+  Contains: _handle_directory_control, fallback routing,
+            DirectoryControl integration, FallbackClassifier usage.
+
+WHAT IS PRESERVED
+=================
+- Complete DirectoryControl implementation (workspace management,
+  file CRUD, move/copy/rename, path security enforcement)
+- Complete FallbackClassifier implementation (category constants,
+  AGError typed errors, domain/code message lookup, signal maps)
+- IntentRouter (rule-based intent classification)
+- AGPipeline (cognitive pipeline orchestration)
+- Ag.py main loop and all handler functions
+
+NEXT STEP
+=========
+Preprocessor Brain implementation by Claude.
+File: D:\AG\preprocessor_brain.py (skeleton created alongside this backup)

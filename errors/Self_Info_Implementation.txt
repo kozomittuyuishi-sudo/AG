@@ -1,0 +1,17 @@
+Files added: self_info/__init__.py, self_info/ab_self_model.py, self_info/query_router.py, self_info/task_assessor.py, self_info/self_info_engine.py
+Files modified: Ag.py (import, detect_intent, process_input, _handle_self_info, main)
+Functionality: structured self-model (identity/architecture/capabilities/limitations/operational); query router with is_self_info_query gate; task assessor returning FEASIBLE/PARTIALLY FEASIBLE/NOT CURRENTLY FEASIBLE/REQUIRES ADDITIONAL CAPABILITIES; SelfInfoEngine assembles verified context_block from self-model + optional RuntimeSnapshot
+Integration point: detect_intent() routes self-info queries to "self_info" intent before Cloud Brain; _handle_self_info() passes verified context_block to brain for formatting only
+Validation: pytest 436 passed, 0 failed; self_info queries verified to return structured verified context, not LLM-invented answers
+Remaining issue: "what is your version" variants that start with "what is " could still hit recall if not in exact-match list; mitigated by adding common variants to exact-match block
+
+--- Fix: Self Capability Assessment routing (2026-08-08) ---
+Problem: "How good are you with automation?" returned empty. _TASK_ASSESSMENT_PREFIXES only had "can you ", "could you " etc. Patterns like "how good are you with X", "how well can you X", "what are your limitations with X" were not matched by is_self_info_query(), so detect_intent() returned "unknown" and the pipeline failed.
+Fix: Added new capability-assessment prefixes to _TASK_ASSESSMENT_PREFIXES in query_router.py. Added "limitations", "weakness", "weaknesses", "not capable", "incapable" to _LIMITATIONS_KEYWORDS. Added "automation" signal to task_assessor.py _LIMITATION_SIGNALS.
+Files modified: self_info/query_router.py, self_info/task_assessor.py
+
+--- Fix: Contextual entity follow-up resolution (2026-08-08) ---
+Problem: "What is his monthly revenue?" after "Tell me about Linus Torvalds" returned empty. Entity tracker recorded entities with confidence=0.6. ReferenceResolver _compute_confidence applied recency penalty: 0.6 - 0.12 = 0.48, below AUTO_RESOLVE_THRESHOLD (0.65). "his" was never resolved to "Linus Torvalds".
+Fix: Raised entity confidence in _extract_entities_from_text from 0.6 to 0.9. Post-penalty score: 0.9 - 0.12 + 0.08 (single-entity boost) = 0.86, above threshold. Tested: Linus Torvalds (his), Elon Musk (he), Earth (its).
+Files modified: Ag.py
+Validation: pytest 436 passed, 0 failed

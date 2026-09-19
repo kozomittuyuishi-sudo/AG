@@ -1,0 +1,6 @@
+Files checked: Ag.py, ag_pipeline.py, brain.py, brain_dispatcher.py, runtime_adapter.py, cognition/* , conversation/*, brains/cloud_brain/*, memory/*, storage/*, diagnostics/*, runtime/introspection/*
+Issues found: 2 config filename mismatches — control_layer.py expects brain_registry.json and permissions.json; actual files on disk are brain-registry.JSON and permissions.JSON (case+hyphen difference; will fail on Linux, silent on Windows)
+Priority files affected: cognition/control_layer.py (BrainRegistry + AuthorizationManager both broken on case-sensitive filesystems)
+Additional note: Ag.py imports build_registry from runtime.runtime_adapter (correct path confirmed); ask_brain try/except fallback in Ag.py is safe; development_manager.py is an empty stub (0 bytes) — not imported anywhere, no impact
+Fixes required: Yes — 2 filename fixes needed in configuration/ before cross-platform deployment; Windows runtime unaffected today
+Overall health: Runtime chain (Ag.py → brain.py → ag_pipeline.py → all subsystems) is structurally sound; no broken imports, no circular imports, no missing modules detected; 1 dead stub file (development_manager.py)

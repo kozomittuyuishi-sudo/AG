@@ -1,0 +1,15 @@
+
+pip install aider-chat
+.venv\Scripts\activate
+python3.12 -m venv .venv
+python -m pip install --upgrade pip setuptools wheel
+pip install pytest-cov
+pip install pytest
+aider --model openrouter/deepseek/deepseek-r1
+pytest --collect-only
+pytest -v
+pytest -ra
+kiro-cli
+aider --model openrouter/deepseek/deepseek-r1
+
+

@@ -1,0 +1,402 @@
+==================================================
+REPOSITORY FILE MAP — PROJECT AB
+==================================================
+
+This document is the official repository map for Project AB.
+It reflects the final state of the repository after migration and
+must be kept up to date as the codebase evolves.
+
+==================================================
+RUNTIME
+==================================================
+
+runtime/
+    Ag.py
+    runtime_adapter.py
+    development_manager.py
+    __init__.py
+
+runtime/introspection/
+    introspection_engine.py
+    runtime_snapshot.py
+    snapshot_builder.py
+    subsystem_interface.py
+    subsystem_registry.py
+    __init__.py
+
+Purpose:
+Application entry point, startup orchestration, and runtime
+infrastructure. Ag.py is the main loop and primary interface for
+user interaction. runtime_adapter.py wraps every major subsystem
+into IntrospectableSubsystem adapters so the health of each
+component can be observed at runtime. development_manager.py is a
+reserved stub for future development-mode tooling.
+The introspection/ sub-package owns the snapshot and registry
+machinery used to report live system health.
+
+--------------------------------------------------
+
+PIPELINE
+--------------------------------------------------
+
+pipeline/
+    ag_pipeline.py
+    __init__.py
+
+Purpose:
+End-to-end request pipeline that coordinates cognitive processing,
+brain dispatch, and response delivery in a single pass.
+AGPipeline assembles all subsystems and drives a user turn from
+raw input to final response.
+
+--------------------------------------------------
+
+COGNITION
+--------------------------------------------------
+
+cognition/
+    cognitive_engine.py
+    control_layer.py
+    executive.py
+    executive_layer.py
+    __init__.py
+
+Purpose:
+Higher-order reasoning and decision-making. CognitiveEngine
+classifies intent, evaluates scratchpad state, and assembles the
+payload for a brain call. ControlLayer manages brain selection,
+authorization, and fallback chains. ExecutiveLayer interprets
+category and storage decisions and builds execution plans.
+executive.py holds the core ExecutiveState and analysis logic
+used by ExecutiveLayer.
+
+--------------------------------------------------
+
+CONVERSATION
+--------------------------------------------------
+
+conversation/
+    conversation_manager.py
+    response_processor.py
+    __init__.py
+
+conversation/core/
+    conversation_context.py
+    conversation_frame.py
+    entity.py
+    entity_tracker.py
+    thought.py
+    __init__.py
+
+conversation/cognitive/
+    confidence_engine.py
+    context_resolver.py
+    evaluator.py
+    reference_resolver.py
+    response_verifier.py
+    __init__.py
+
+Purpose:
+Conversation flow, turn management, entity tracking, and context
+handling. conversation_manager.py orchestrates the full
+conversation lifecycle. response_processor.py sanitises and
+evaluates raw brain responses. The core/ sub-package holds the
+data model: context state (ConversationContext), per-turn frames
+(ConversationFrame), entity registry (Entity/EntityTracker), and
+the reasoning object (Thought). The cognitive/ sub-package
+provides deeper analysis: reference and context resolution,
+cognitive evaluation, confidence scoring, and response
+verification.
+
+--------------------------------------------------
+
+BRAINS
+--------------------------------------------------
+
+brains/
+    brain.py
+    brain_dispatcher.py
+    local_brain.py
+    token_budget.py
+    __init__.py
+
+brains/cloud_brain/
+    adaptive_brain.py
+    provider_registry.py
+    request_logger.py
+    request_validator.py
+    response_validator.py
+    retry_manager.py
+    token_estimator.py
+    __init__.py
+
+Purpose:
+Brain abstraction layer and all concrete brain implementations.
+brain.py is the primary client: it provides ask_brain(), mode
+switching, and the OpenAI/Ollama client wrappers. brain_dispatcher.py
+routes calls to the correct adapter at runtime. local_brain.py
+wraps Ollama for on-device inference. token_budget.py manages
+response category budgets globally. The cloud_brain/ sub-package
+implements the full adaptive cloud brain: AdaptiveCloudBrain
+coordinates request preparation, validation, retry, logging, and
+response validation across multiple providers, using a dedicated
+module for each concern.
+
+--------------------------------------------------
+
+MEMORY
+--------------------------------------------------
+
+memory/
+    working_memory.py
+    clean_memory.py
+    __init__.py
+
+Purpose:
+Working memory and in-session state management. WorkingMemory
+holds all transient per-session state: objectives, tasks, topics,
+facts, pending actions, reasoning notes, decision cache, and
+the discussion log. clean_memory.py provides a utility to strip
+ANSI contamination from persisted memory files.
+
+--------------------------------------------------
+
+STORAGE
+--------------------------------------------------
+
+storage/
+    storage_manager.py
+    schema_processor.py
+    index_manager.py
+    __init__.py
+
+Purpose:
+Persistent document storage with schema validation and full-text
+search. storage_manager.py implements atomic CRUD operations over
+JSON collection files. schema_processor.py validates and normalises
+documents against versioned schemas, resolving aliases and
+generating metadata. index_manager.py maintains keyword, entity,
+and tag indexes over stored collections and supports ranked search.
+
+--------------------------------------------------
+
+DIAGNOSTICS
+--------------------------------------------------
+
+diagnostics/
+    probe_simulator.py
+    analytics_logger.py
+    __init__.py
+
+Purpose:
+System observability and action safety analysis. probe_simulator.py
+simulates proposed actions, estimates risk, detects dependencies,
+and generates alternatives before execution. analytics_logger.py
+records and queries runtime events (brain usage, action patterns,
+topic frequencies, error events) to a persistent JSONL log.
+
+--------------------------------------------------
+
+TESTS
+--------------------------------------------------
+
+tests/
+    test_adaptive_cloud_brain.py
+    test_ag.py
+    test_ag_pipeline.py
+    test_brain.py
+    test_brain_dispatcher.py
+    test_cognitive_engine.py
+    test_control_layer.py
+    test_conversation_manager.py
+    test_entity_tracking.py
+    test_executive_layer.py
+    test_introspection_engine.py
+    test_local_brain.py
+    test_probe_assertions.py
+    test_probe_simulator.py
+    test_response_processor.py
+    test_schema_processor.py
+    test_storage_index.py
+    test_token_budget.py
+    test_working_memory.py
+    __init__.py
+
+Purpose:
+Full unit and integration test suite. Each test module corresponds
+directly to the subsystem it exercises. Tests are written for pytest
+and cover happy paths, failure recovery, edge cases, and
+contract stability.
+
+--------------------------------------------------
+
+CONFIGURATION
+--------------------------------------------------
+
+configuration/
+    brain_config.json
+    brain_registry.json
+    memory.json
+    permissions.json
+    project_context.json
+    requirements (1).txt
+    tasks.json
+
+Purpose:
+Runtime configuration files. brain_config.json controls the active
+brain mode. brain_registry.json lists registered brain identities
+and their metadata. permissions.json defines allowed/denied
+capability permissions. memory.json and tasks.json are persistent
+state files written at runtime by Ag.py. project_context.json
+stores project-level metadata. requirements (1).txt lists Python
+package dependencies.
+
+--------------------------------------------------
+
+DOCS
+--------------------------------------------------
+
+docs/
+    FINAL_PHASE1_VALIDATION.md
+    STABILIZATION_REPORT.md
+    README (2).md
+    session_assignments.txt
+    core.txt
+    Untitled.txt
+
+docs/errors_overtime/
+    INDEX.txt
+    ERROR_001_openai_not_installed.txt
+    ERROR_002_dotenv_missing_system_python.txt
+    ERROR_003_split_environment.txt
+    ERROR_004_test_brain_fails.txt
+    ERROR_005_agpy_startup_crash.txt
+    ERROR_006_ollama_ansi_escape_codes.txt
+    ERROR_007_eof_unhandled_main_loop.txt
+    ERROR_008_venv_wrong_interpreter.txt
+    ERROR_009_memory_json_ansi_contamination.txt
+
+Purpose:
+Project documentation. The root docs/ files contain phase
+validation reports, the project README, and session planning notes.
+errors_overtime/ is a historical error log — each file records a
+specific bug encountered during development, its cause, and
+resolution. These serve as a project knowledge base.
+
+--------------------------------------------------
+
+DATA
+--------------------------------------------------
+
+data/
+    warehouse/
+        events.jsonl
+
+Purpose:
+Persistent runtime data store. events.jsonl is the analytics event
+log written by analytics_logger.py. The warehouse/ directory is the
+designated store for runtime-generated data files.
+
+--------------------------------------------------
+
+SCRIPTS
+--------------------------------------------------
+
+scripts/
+    install_tools.bat
+    npm
+    npm.cmd
+    npm.ps1
+    npx
+    npx.cmd
+    npx.ps1
+    nodevars.bat
+    corepack
+    corepack.cmd
+
+Purpose:
+Development utility scripts. install_tools.bat automates tool
+installation. The npm/npx wrappers and nodevars.bat are Node.js
+environment helpers bundled for convenience. corepack wrappers
+support package manager management.
+
+--------------------------------------------------
+
+AUTOMATION TIMELINE
+--------------------------------------------------
+
+automation timeline/
+    Changes Worked On.txt
+
+Purpose:
+Running change log of all automation and development work performed
+on the project over time. Acts as a human-readable development
+diary.
+
+==================================================
+EMPTY PLACEHOLDER FOLDERS
+==================================================
+
+The following architectural folders exist in the repository but
+currently contain no files. They are reserved for future use and
+reflect the intended final architecture:
+
+    shared/
+    interfaces/
+    automation/
+    architecture/
+
+These folders were likely created as part of the repository
+migration to pre-define the target structure. They should be
+populated as the project expands.
+
+==================================================
+UNCATEGORIZED FILES
+==================================================
+
+The following files exist at the repository root or in non-standard
+locations and could not be confidently placed in a primary
+architectural folder:
+
+1.  D:\AG\node.exe  (92.5 MB binary)
+    Reason: A Node.js runtime executable at the project root. Not
+    part of the Python codebase. Likely placed here to support the
+    npm/npx scripts in scripts/. Could be moved to scripts/ or a
+    dedicated tools/ folder for clarity.
+
+2.  D:\AG\.gitignore
+    Reason: Repository configuration file, not a project source
+    file. Standard root placement is correct.
+
+3.  D:\AG\.aider.chat.history.md
+    D:\AG\.aider.input.history
+    D:\AG\.aider.tags.cache.v4\  (directory)
+    Reason: Aider AI coding assistant session artifacts. These are
+    tool-generated and belong in .gitignore rather than tracked
+    source. Not part of the application architecture.
+
+4.  D:\AG\platform-tools\  (directory — adb.exe, fastboot.exe, etc.)
+    Reason: Android SDK platform tools. Unrelated to the Python
+    project. Their presence is unexplained by the current
+    codebase. Likely a leftover from a different project or an
+    unrelated device-management workflow.
+
+5.  D:\AG\__pycache__\  (root-level cache)
+    Reason: Python bytecode cache at the project root, indicating
+    that some source files (Ag.py, brain.py, etc.) were previously
+    executed from the root before migration into sub-packages. Can
+    be safely deleted.
+
+==================================================
+LAST UPDATED
+==================================================
+
+Date:             2026-08-06
+Migration Version: Post-Maintenance-Pass-1
+Total Files Organized: 72 project source files across 12 architectural
+                       folders (excluding __init__.py package markers,
+                       test suite, configuration, docs, data, and
+                       scripts; 133 Python files total in project scope,
+                       not counting .venv or node_modules)
+
+==================================================

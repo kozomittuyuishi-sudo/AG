@@ -1,0 +1,23 @@
+Run 1
+What can you do?
+What are your capabilities?
+Tell me about yourself.
+What brains do you have?
+How do you work internally?
+What are your limitations?
+What can you do and what can't you do?
+Tell me who you are, what you're capable of, and how you work internally.
+
+Run 2
+What can you currently do?
+What functionality do you have?
+What can you help me with?
+What functions do you support?
+How many brains do you have?
+Which brains are available?
+How do you process requests?
+What operations don't you support?
+So what can you do?
+What do you know about yourself?
+What do you know about your capabilities?
+Tell me about yourself, what can you do, and how do you work internally.

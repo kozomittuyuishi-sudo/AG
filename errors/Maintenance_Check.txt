@@ -1,0 +1,12 @@
+Date: 2026-08-06 | Maintenance Pass 1
+
+Files modified: runtime/Ag.py (3 fixes), Repository_File_Map.txt (config section + date)
+
+Issues resolved:
+  1. Duplicate SnapshotBuilderConfig import inside main() — removed; top-level import retained.
+  2. complete_task() prefix list misordered — 'mark task' matched before 'mark task number', causing parse failure on 'mark task number N done'; reordered longest-first.
+  3. Repository_File_Map.txt configuration section listed stale filenames brain-registry.JSON and permissions.JSON; corrected to brain_registry.json and permissions.json.
+
+Validation: pytest — 436 passed, 0 failed (previously 1 failed on test_complete_task).
+
+Recommendations (not auto-applied): remove runtime/development_manager.py (0-byte dead stub); remove tests/__init__.py (comment-only, not needed by pytest); rename configuration/requirements (1).txt to requirements.txt; delete root __pycache__ (stale pre-migration bytecode from cpython-312 and cpython-314).
