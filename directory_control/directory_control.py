@@ -122,6 +122,122 @@ class DirectoryControl:
         """
         return self.set_directory(path)
 
+    def navigate_directory(self, target: str) -> str:
+        """
+        Navigate to a target directory using the NAVIGATE contract.
+
+        This is the single authoritative method for all natural-language
+        navigation requests ("go to", "navigate to", "move into", etc.).
+        It handles:
+
+          * Absolute Windows paths         — ``D:/AG`` or ``D:\\AG``
+          * Relative paths                 — ``backup``, ``backup/pre_preprocessor_migration``
+          * The special token ``.``        — stay in active workspace (no-op)
+          * The special token ``..``       — go to parent directory
+          * The keyword ``parent``         — synonym for ``..``
+          * Forward slashes and backslashes are normalised by pathlib
+
+        Validation contract (Phase 5):
+
+          1. Resolve the target relative to the current active directory.
+          2. Normalise via pathlib.Path.resolve().
+          3. Verify the resolved path exists.
+          4. Verify it is a directory, not a file.
+          5. Only if all checks pass: update ``_active_directory``.
+
+        If the target is invalid, the CURRENT active directory is
+        preserved unchanged and a WorkspaceNotFoundError is raised.
+
+        Parameters
+        ----------
+        target : str
+            The navigation target — may be absolute, relative, ``.``,
+            ``..``, or the word ``parent``.
+
+        Returns
+        -------
+        str
+            The resolved path of the new active directory (as a string).
+
+        Raises
+        ------
+        NoActiveWorkspaceError
+            If the current active directory is not set AND the target is
+            relative/parent (absolute targets do not require a base).
+        WorkspaceNotFoundError
+            If the resolved target does not exist or is not a directory.
+        WorkspaceViolationError
+            Not raised by this method — navigate_directory intentionally
+            permits navigating to any valid directory (not workspace-bounded).
+            This is the correct contract: "go to D:/other" must work even
+            if D:/other is not inside the current workspace.
+        """
+        stripped = target.strip().strip('"').strip("'").strip()
+
+        # ---- Normalise "parent" keyword to ".." -------------------------
+        if stripped.lower() == "parent":
+            stripped = ".."
+
+        # ---- Absolute path — does not require an active workspace -------
+        candidate = Path(stripped)
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+            if not resolved.exists():
+                raise WorkspaceNotFoundError(
+                    f"Navigation target does not exist: {stripped}"
+                )
+            if not resolved.is_dir():
+                raise WorkspaceNotFoundError(
+                    f"Navigation target is not a directory: {stripped}"
+                )
+            self._active_directory = resolved
+            self._reader.read_directory(str(resolved))
+            return str(resolved)
+
+        # ---- Relative path / special tokens — require an active base ---
+        current = self._require_workspace()
+
+        if stripped == ".":
+            # "go to ." — stay where we are; confirm the active directory
+            return str(current)
+
+        if stripped == "..":
+            parent = current.parent
+            if parent == current:
+                # Already at filesystem root; refuse silently (stay put)
+                raise WorkspaceNotFoundError(
+                    "Already at the filesystem root — cannot navigate further up."
+                )
+            resolved = parent.resolve()
+            if not resolved.exists():
+                raise WorkspaceNotFoundError(
+                    f"Parent directory does not exist: {resolved}"
+                )
+            if not resolved.is_dir():
+                raise WorkspaceNotFoundError(
+                    f"Parent path is not a directory: {resolved}"
+                )
+            self._active_directory = resolved
+            self._reader.read_directory(str(resolved))
+            return str(resolved)
+
+        # ---- Multi-segment or bare relative path -----------------------
+        # Resolve against the CURRENT active directory (not just the
+        # workspace root). This is crucial: after "go to backup" the base
+        # for the next relative navigation is D:\AG\backup, not D:\AG.
+        candidate = (current / stripped).resolve()
+        if not candidate.exists():
+            raise WorkspaceNotFoundError(
+                f"Navigation target does not exist: {stripped}"
+            )
+        if not candidate.is_dir():
+            raise WorkspaceNotFoundError(
+                f"Navigation target is not a directory: {stripped}"
+            )
+        self._active_directory = candidate
+        self._reader.read_directory(str(candidate))
+        return str(candidate)
+
     def clear_directory(self) -> Optional[str]:
         """
         Remove the active workspace.
@@ -348,6 +464,118 @@ class DirectoryControl:
                 "size_bytes": size,
             })
         return entries
+
+    def inspect_target(self, path: str) -> dict:
+        """
+        Collect deterministic, read-only metadata for a file or directory.
+
+        Reuses the existing workspace path-resolution and containment
+        enforcement via ``_resolve()``.  For absolute paths that live
+        outside the workspace the workspace boundary check is bypassed so
+        that "inspect D:/AG" works from any active workspace — consistent
+        with how ``navigate_directory()`` handles absolute paths.
+
+        Parameters
+        ----------
+        path : str
+            Path to inspect.  May be:
+            - A relative path resolved against the active workspace.
+            - An absolute Windows/POSIX path.
+
+        Returns
+        -------
+        dict
+            For a file::
+
+                {
+                    "operation": "INSPECT",
+                    "target_type": "file",
+                    "name": ...,
+                    "path": ...,
+                    "extension": ...,
+                    "size": ...,        # bytes
+                    "modified": ...,    # ISO-8601 UTC
+                    "readable": ...,
+                    "writable": ...,
+                }
+
+            For a directory::
+
+                {
+                    "operation": "INSPECT",
+                    "target_type": "directory",
+                    "name": ...,
+                    "path": ...,
+                    "file_count": ...,
+                    "directory_count": ...,
+                    "modified": ...,    # ISO-8601 UTC
+                }
+
+        Raises
+        ------
+        NoActiveWorkspaceError
+            If the path is relative and no workspace is set.
+        FileNotFoundInWorkspace
+            If the resolved path does not exist.
+        OperationError
+            If the path exists but is neither a regular file nor a
+            directory (e.g. a device node or broken symlink).
+        """
+        import os as _os
+        from datetime import datetime, timezone
+
+        candidate = Path(path)
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+        else:
+            # Relative path — resolve against active workspace
+            resolved = self._resolve(path)
+
+        if not resolved.exists():
+            raise FileNotFoundInWorkspace(f"Inspect target does not exist: {path}")
+
+        stat = resolved.stat()
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+
+        if resolved.is_file():
+            is_readable = _os.access(resolved, _os.R_OK)
+            is_writable = _os.access(resolved, _os.W_OK)
+            return {
+                "operation": "INSPECT",
+                "target_type": "file",
+                "name": resolved.name,
+                "path": str(resolved),
+                "extension": resolved.suffix,
+                "size": stat.st_size,
+                "modified": mtime,
+                "readable": is_readable,
+                "writable": is_writable,
+            }
+
+        if resolved.is_dir():
+            file_count = 0
+            dir_count = 0
+            try:
+                for item in resolved.iterdir():
+                    if item.is_file():
+                        file_count += 1
+                    elif item.is_dir():
+                        dir_count += 1
+            except PermissionError:
+                pass  # return partial counts on permission errors
+            return {
+                "operation": "INSPECT",
+                "target_type": "directory",
+                "name": resolved.name,
+                "path": str(resolved),
+                "file_count": file_count,
+                "directory_count": dir_count,
+                "modified": mtime,
+            }
+
+        raise OperationError(
+            f"Inspect target is not a regular file or directory: {path}"
+        )
 
     def get_indexed_files(self) -> List[FileEntry]:
         """

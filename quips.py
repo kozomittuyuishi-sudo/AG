@@ -106,7 +106,7 @@ _BOUNDARY = re.compile(r"\s*,\s*(?:and\s+)?|\s+(?:and|also|then)\s+", re.IGNOREC
 _REQUEST_START = re.compile(
     r"^(?:what|who|where|when|why|how|tell|describe|explain|list|show|"
     r"create|make|write|read|open|delete|remove|rename|move|copy|find|"
-    r"search|remember|recall|add|complete|finish|mark|set|switch)\b",
+    r"search|remember|recall|add|complete|finish|mark|set|switch|inspect)\b",
     re.IGNORECASE,
 )
 _WORKFLOW = re.compile(
@@ -203,6 +203,8 @@ def _classify_broad_category(text: str) -> tuple[str, str, str]:
         if re.search(r"\b(?:create|make)\b", text):
             return RequestCategory.FILE_OPERATION, "CREATE_FILE", RoutingDecision.LEGACY_INTENT_ROUTER
         return RequestCategory.FILE_OPERATION, "FILE_OPERATION", RoutingDecision.LEGACY_INTENT_ROUTER
+    if re.search(r"\binspect\b|\bshow\s+(?:information|info)\s+about\b", text):
+        return RequestCategory.FILE_OPERATION, "INSPECT", RoutingDecision.LEGACY_INTENT_ROUTER
     if re.search(r"\b(?:remember|recall|memory|memories)\b", text):
         return RequestCategory.MEMORY, "MEMORY", RoutingDecision.LEGACY_INTENT_ROUTER
     if re.search(r"\b(?:current|active|my)\s+workspace\b|\bwhere am i\b", text):

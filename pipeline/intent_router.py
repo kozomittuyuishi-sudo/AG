@@ -93,6 +93,17 @@ _LOCAL_STATE_EXACT: frozenset[str] = frozenset({
     "what is the current directory",
     "what is my active directory",
     "what is my current directory",
+    # Phase 3 additions — natural location queries
+    "where are you working",
+    "what is the current workspace",
+    "what is my current workspace",
+    "what workspace am i in",
+    "what is my active workspace",
+    "what is my current active directory",
+    "current directory",
+    "where are we",
+    "what directory are we in",
+    "what folder are we in",
 })
 
 # Exact-match phrases for CAPABILITY_QUERY
@@ -199,6 +210,10 @@ _PREFIX_RULES: list[tuple[str, str, str]] = [
     ("switch to ",            Intent.DIRECTORY_OP, "switch"),
     ("cd ",                   Intent.DIRECTORY_OP, "switch"),
     ("change directory to ",  Intent.DIRECTORY_OP, "switch"),
+    # DIRECTORY_OP — navigate (go to / navigate to / move into)
+    ("go to ",                Intent.DIRECTORY_OP, "navigate"),
+    ("navigate to ",          Intent.DIRECTORY_OP, "navigate"),
+    ("move into ",            Intent.DIRECTORY_OP, "navigate"),
     # DIRECTORY_OP — set
     ("work in ",              Intent.DIRECTORY_OP, "set"),
     ("use ",                  Intent.DIRECTORY_OP, "set"),
@@ -345,9 +360,17 @@ class IntentRouter:
                 )
 
         # ----------------------------------------------------------------
-        # 6. go_back detection
+        # 6. go_back / parent detection (all phrasings that weren't
+        #    captured by prefix rules above, because "go to .." doesn't
+        #    start with "go to " without a space-separated target)
         # ----------------------------------------------------------------
-        if normalized in ("go back", "go up", "cd ..", "back"):
+        _PARENT_EXACT: frozenset[str] = frozenset({
+            "go back", "go up", "cd ..", "back", "..",
+            "go to parent", "go to ..",
+            "navigate to parent", "navigate to ..",
+            "move to parent", "move to ..",
+        })
+        if normalized in _PARENT_EXACT:
             return IntentResult(
                 intent=Intent.DIRECTORY_OP,
                 sub_op="go_back",

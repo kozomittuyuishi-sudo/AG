@@ -822,6 +822,16 @@ def detect_intent(user_input):
         "what directory am i in",
         "what folder am i in",
         "show directory",
+        # Additional location queries (Phase 3)
+        "where are you working",
+        "what is the current workspace",
+        "what is my current workspace",
+        "what workspace am i in",
+        "what is my active workspace",
+        "what is my current directory",
+        "what is my active directory",
+        "what is my current active directory",
+        "current directory",
     })
     if text in _dc_show_phrases:
         return "dc_show_directory"
@@ -979,6 +989,12 @@ def _format_preprocessor_directory_result(pb_result) -> str:
 
     if intent == _PBIntent.SWITCH_DIRECTORY:
         return f"AG: Active workspace switched to: {result}"
+
+    if intent == _PBIntent.NAVIGATE:
+        target = pb_result.target or "."
+        if target == ".":
+            return f"AG: You are already in: {result}"
+        return f"AG: Navigated to: {result}"
 
     if intent == _PBIntent.RENAME:
         return f"AG: Renamed to: {result}"

@@ -124,6 +124,12 @@ class Intent:
     WRITE_FILE = "WRITE_FILE"
     APPEND_FILE = "APPEND_FILE"
     SWITCH_DIRECTORY = "SWITCH_DIRECTORY"
+    # NAVIGATE is the deterministic navigation contract (Phase 2).
+    # It handles "go to", "navigate to", "open", "move into", "..", "parent",
+    # relative paths, and absolute paths — updating the one authoritative
+    # active-directory state in DirectoryControl.
+    NAVIGATE = "NAVIGATE"
+    INSPECT = "INSPECT"
     RENAME = "RENAME"
     COPY = "COPY"
     MOVE = "MOVE"
@@ -451,6 +457,8 @@ class CapabilityRegistry:
         Intent.WRITE_FILE: "write_file",
         Intent.APPEND_FILE: "append_file",
         Intent.SWITCH_DIRECTORY: "switch_directory",
+        Intent.NAVIGATE: "navigate_directory",
+        Intent.INSPECT: "inspect_target",
         Intent.RENAME: "rename",
         Intent.COPY: "copy",
         Intent.MOVE: "move",
@@ -467,6 +475,8 @@ class CapabilityRegistry:
         Intent.WRITE_FILE: "write file contents",
         Intent.APPEND_FILE: "append to files",
         Intent.SWITCH_DIRECTORY: "switch the active directory",
+        Intent.NAVIGATE: "navigate to a directory",
+        Intent.INSPECT: "inspect a file or directory",
         Intent.RENAME: "rename files/folders",
         Intent.COPY: "copy files",
         Intent.MOVE: "move files/folders",
@@ -712,6 +722,19 @@ class RequestClassifier:
         r"\bchange (?:the )?(?:directory|workspace) to\b|^\s*cd\s|\bwork\s+in\b|"
         r"\bmake\b.*\bmy\s+workspace\b",
         r"\buse\s+(?:[A-Za-z]:[\\/]|\.{1,2}[\\/]|~[\\/]|/)",
+        # --- NAVIGATE patterns (Phase 2) ---
+        # "go to", "navigate to", "move into", "move to", "open" as navigation
+        r"\bgo\s+to\b",
+        r"\bnavigate\s+to\b",
+        r"\bmove\s+into\b",
+        r"\bmove\s+to\b",
+        r"\bopen\b.*\b(?:folder|directory)\b",
+        # Parent / current navigation
+        r"\bgo\s+(?:up|back)\b",
+        r"\bgo\s+to\s+(?:\.\.|parent)\b",
+        r"\bnavigate\s+to\s+(?:parent|\.\.)\b",
+        r"\bmove\s+to\s+(?:parent|\.\.)\b",
+        # --- end NAVIGATE patterns ---
         r"\brename\b",
         r"\bcopy\b.*\bto\b|^\s*cp\s",
         r"\bmove\b.*\bto\b|^\s*mv\s",
@@ -721,8 +744,11 @@ class RequestClassifier:
         r"\bcreate\b.*\bfile\b|\bmake\b.*\bfile\b",
         r"\bwrite\b",
         r"\bsearch\b|\bfind\b.*\bfile\b",
-        r"\bopen\b.*\b(?:folder|directory)\b",
         r"\bread\b|\bopen file\b|^\s*cat\s",
+        # --- INSPECT patterns ---
+        r"\binspect\b",
+        r"\bshow\s+(?:information|info)\s+about\b",
+        r"\btell\s+me\s+about\b.*\b(?:\.[a-z0-9]{1,8}|folder|directory|file)\b",
     ]]
 
     _DIRECTORY_NOUNS = re.compile(r"\b(?:file|folder|directory|workspace|path)\b", re.IGNORECASE)
@@ -773,6 +799,21 @@ class IntentDetector:
     """
 
     _RULES: List[Tuple[re.Pattern, str]] = [
+        # 0. INSPECT — if the input literally starts with "inspect" (or a
+        #    recognised "show information about / tell me about" variant),
+        #    it is unambiguously an inspection request regardless of what
+        #    comes after it ("inspect the current workspace",
+        #    "inspect this directory", "inspect .").
+        #    This rule MUST be first so it cannot be shadowed by the
+        #    CURRENT_DIRECTORY or LIST_DIRECTORY rules below that also
+        #    match on "current workspace" and "this directory".
+        (re.compile(r"^\s*inspect\b", re.IGNORECASE), Intent.INSPECT),
+        (re.compile(r"^\s*show\s+(?:information|info)\s+about\b", re.IGNORECASE), Intent.INSPECT),
+        (re.compile(
+            r"^\s*tell\s+me\s+about\b.*\b(?:\.[a-z0-9]{1,8}|folder|directory|file)\b",
+            re.IGNORECASE,
+        ), Intent.INSPECT),
+
         # 1. Unambiguous "list contents" phrasing always wins first —
         #    this must be narrow (verb + files/contents/everything, or an
         #    explicit "what's in"), NOT a bare list/show verb, so it can
@@ -818,6 +859,30 @@ class IntentDetector:
                      r"\buse\s+(?:[A-Za-z]:[\\/]|\.{1,2}[\\/]|~[\\/]|/)",
                      re.IGNORECASE),
          Intent.SWITCH_DIRECTORY),
+
+        # 3a. NAVIGATE — go to / navigate to / move into / open <folder>.
+        #     Checked AFTER switch/set workspace so those more-explicit
+        #     phrasings ("switch workspace to") win when present.
+        #     These rules must come BEFORE the rename/copy/move action verbs
+        #     (rules 4+) to prevent "move into backup" being classified as MOVE.
+        #
+        #     Parent navigation: "go up", "go back", "go to ..", "go to parent",
+        #     "navigate to parent", "move to parent".
+        #     Current navigation: "go to .".
+        #     Named navigation: "go to backup", "navigate to D:/AG".
+        (re.compile(
+            r"\bgo\s+(?:up|back)\b"
+            r"|\bgo\s+to\s+(?:\.\.|parent\b)"
+            r"|\bnavigate\s+to\s+(?:parent\b|\.\.)"
+            r"|\bmove\s+to\s+(?:parent\b|\.\.)",
+            re.IGNORECASE,
+        ), Intent.NAVIGATE),
+        (re.compile(
+            r"\bgo\s+to\b"
+            r"|\bnavigate\s+to\b"
+            r"|\bmove\s+into\b",
+            re.IGNORECASE,
+        ), Intent.NAVIGATE),
 
         # 4. Rename / copy / move / delete — explicit verbs, unambiguous.
         (re.compile(r"\brename\b", re.IGNORECASE), Intent.RENAME),
@@ -904,6 +969,12 @@ class CommandParser:
         if intent == Intent.SWITCH_DIRECTORY:
             return self._parse_switch_directory(raw)
 
+        if intent == Intent.NAVIGATE:
+            return self._parse_navigate_directory(raw)
+
+        if intent == Intent.INSPECT:
+            return self._parse_inspect(raw)
+
         if intent == Intent.READ_FILE:
             return self._parse_single_path_command(
                 raw, intent,
@@ -950,7 +1021,193 @@ class CommandParser:
             return raw[m.end():]
         return raw
 
-    # Ordered path-extraction patterns for SET_WORKSPACE / SWITCH_DIRECTORY.
+    def _parse_navigate_directory(self, raw: str) -> ParsedCommand:
+        """
+        Parse a NAVIGATE intent into a ParsedCommand with a ``target``.
+
+        Navigation targets (in priority order):
+
+        1. Parent navigation keywords → target = ".."
+           "go up", "go back", "go to ..", "go to parent",
+           "navigate to parent", "move to parent", "navigate to .."
+
+        2. Current-directory token → target = "."
+           "go to ."
+
+        3. Absolute Windows path → target = the path as-given (forward or
+           back slashes; drive letter required)
+
+        4. Quoted path/name → target = the quoted string
+
+        5. Explicit relative path (contains separator) → target = the path
+
+        6. Bare name (no separator) — e.g. "go to backup" →
+           target = the bare name (resolved as relative at execution time)
+
+        If no target can be extracted, returns an incomplete ParsedCommand
+        so the caller can ask for clarification.
+        """
+        text = raw.strip()
+        text_lower = text.lower()
+
+        # ---- 1. Parent navigation ----------------------------------------
+        _PARENT_PATTERNS = [
+            re.compile(r"\bgo\s+(?:up|back)\b", re.IGNORECASE),
+            re.compile(r"\bgo\s+to\s+\.\.", re.IGNORECASE),
+            re.compile(r"\bgo\s+to\s+parent\b", re.IGNORECASE),
+            re.compile(r"\bnavigate\s+to\s+(?:parent\b|\.\.)", re.IGNORECASE),
+            re.compile(r"\bmove\s+to\s+(?:parent\b|\.\.)", re.IGNORECASE),
+        ]
+        for pat in _PARENT_PATTERNS:
+            if pat.search(text):
+                return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                      target="..")
+
+        # ---- 2. Current-directory ". " token ----------------------------
+        _CURRENT_PATTERNS = [
+            re.compile(r"\bgo\s+to\s+\.\s*$", re.IGNORECASE),
+        ]
+        for pat in _CURRENT_PATTERNS:
+            if pat.search(text):
+                return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                      target=".")
+
+        # ---- Strip the navigation verb phrase to get a raw target zone --
+        # Remove leading "go to", "navigate to", "move into", "open",
+        # plus optional trailing punctuation.
+        _NAV_VERB_RE = re.compile(
+            r"^\s*(?:please\s+)?"
+            r"(?:go\s+to|navigate\s+to|move\s+into|open)\s+",
+            re.IGNORECASE,
+        )
+        m = _NAV_VERB_RE.match(text)
+        target_zone = text[m.end():].strip() if m else text
+
+        # Strip surrounding quotes
+        target_zone = _strip_quotes(target_zone)
+        target_zone = _strip_target_punct(target_zone)
+
+        if not target_zone:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                  complete=False, missing_fields=["target"])
+
+        # ---- 3. Absolute Windows path -----------------------------------
+        # e.g. "D:/AG", "D:\AG", "D:/AG/backup"
+        abs_match = re.match(
+            r"^[A-Za-z]:[/\\].*",
+            target_zone,
+        )
+        if abs_match:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                  target=_strip_target_punct(target_zone))
+
+        # ---- 4. UNC or posix absolute path ------------------------------
+        if target_zone.startswith("\\\\") or target_zone.startswith("/"):
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                  target=_strip_target_punct(target_zone))
+
+        # ---- 5. Explicit relative path (contains separator) -------------
+        # e.g. "backup/pre_preprocessor_migration", "backup\subdir"
+        if "/" in target_zone or "\\" in target_zone:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                  target=_strip_target_punct(target_zone))
+
+        # ---- 6. Bare name (single directory component) ------------------
+        # e.g. "backup", "automation timeline", "pre_preprocessor_migration"
+        # Accept it as-is — relative resolution happens in execute().
+        cleaned = _strip_target_punct(target_zone)
+        if cleaned:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                                  target=cleaned)
+
+        return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.NAVIGATE,
+                              complete=False, missing_fields=["target"])
+
+    def _parse_inspect(self, raw: str) -> ParsedCommand:
+        """
+        Parse an INSPECT intent into a ParsedCommand with a ``target``.
+
+        Recognised forms:
+          inspect <target>
+          inspect the current workspace / inspect . / inspect here
+          show information about <target>
+          show info about <target>
+          tell me about <target>
+
+        The ACTIVE_WORKSPACE sentinel is returned for phrases that mean
+        "inspect wherever I currently am".
+        """
+        text = raw.strip()
+
+        # ---- Strip the verb phrase to get the target zone ---------------
+        _INSPECT_VERB_RE = re.compile(
+            r"^\s*(?:please\s+)?"
+            r"(?:inspect"
+            r"|show\s+(?:information|info)\s+about"
+            r"|tell\s+me\s+about"
+            r")\s+",
+            re.IGNORECASE,
+        )
+        m = _INSPECT_VERB_RE.match(text)
+        target_zone = text[m.end():].strip() if m else text
+
+        # Strip surrounding quotes only (not trailing punct yet) so that
+        # the special tokens "." and ".." survive the next steps.
+        target_zone = _strip_quotes(target_zone).strip()
+
+        if not target_zone:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  complete=False, missing_fields=["target"])
+
+        # ---- Special path tokens — must be handled before _strip_target_punct
+        #      because "." is in _TRAILING_PUNCT and would be wiped out.
+        if target_zone == ".":
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  target=ACTIVE_WORKSPACE)
+        if target_zone == "..":
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  target="..")
+
+        # Now safe to apply trailing-punctuation stripping
+        target_zone = _strip_target_punct(target_zone)
+
+        if not target_zone:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  complete=False, missing_fields=["target"])
+
+        # ---- Context phrases → ACTIVE_WORKSPACE sentinel ----------------
+        _lower = target_zone.lower()
+        _INSPECT_WORKSPACE_PHRASES = {
+            ".", "here", "this", "current", "this directory", "this folder",
+            "this file", "this workspace", "the workspace", "the directory",
+            "the folder", "the current workspace", "current workspace",
+            "active workspace", "the active workspace", "my workspace",
+            "the current directory", "current directory", "the active directory",
+            "active directory",
+        }
+        if _lower in _INSPECT_WORKSPACE_PHRASES:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  target=ACTIVE_WORKSPACE)
+
+        # ---- Absolute Windows path --------------------------------------
+        if re.match(r"^[A-Za-z]:[/\\]", target_zone):
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  target=_strip_target_punct(target_zone))
+
+        # ---- UNC or POSIX absolute path ---------------------------------
+        if target_zone.startswith("\\\\") or target_zone.startswith("/"):
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  target=_strip_target_punct(target_zone))
+
+        # ---- Bare name or relative path (contains separator or bare word) ---
+        cleaned = _strip_target_punct(target_zone)
+        if cleaned:
+            return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                                  target=cleaned)
+
+        return ParsedCommand(domain=Domain.DIRECTORY, intent=Intent.INSPECT,
+                              complete=False, missing_fields=["target"])
+
     # Checked in order; the first structural match wins. "make X my
     # workspace" is handled separately because the path sits in the
     # MIDDLE of the sentence, not after a fixed prefix, so the generic
@@ -1217,6 +1474,63 @@ class DirectoryOperations:
     def switch_directory(self, path: str) -> str:
         return self.set_directory(path)
 
+    def navigate_directory(self, target: str) -> str:
+        """
+        Navigate to a target directory using the NAVIGATE contract.
+        Mirrors the real DirectoryControl.navigate_directory() surface.
+        """
+        stripped = target.strip().strip('"').strip("'").strip()
+
+        # Normalise "parent" keyword
+        if stripped.lower() == "parent":
+            stripped = ".."
+
+        candidate = Path(stripped)
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+            if not resolved.exists():
+                raise WorkspaceNotFoundError(
+                    f"Navigation target does not exist: {stripped}"
+                )
+            if not resolved.is_dir():
+                raise WorkspaceNotADirectoryError(
+                    f"Navigation target is not a directory: {stripped}"
+                )
+            self._active_directory = resolved
+            return str(resolved)
+
+        # Relative / special — require an active workspace
+        current = self._require_workspace()
+
+        if stripped == ".":
+            return str(current)
+
+        if stripped == "..":
+            parent = current.parent
+            if parent == current:
+                raise WorkspaceNotFoundError(
+                    "Already at the filesystem root — cannot navigate further up."
+                )
+            resolved = parent.resolve()
+            if not resolved.exists() or not resolved.is_dir():
+                raise WorkspaceNotFoundError(
+                    f"Parent directory does not exist or is not a directory: {resolved}"
+                )
+            self._active_directory = resolved
+            return str(resolved)
+
+        candidate = (current / stripped).resolve()
+        if not candidate.exists():
+            raise WorkspaceNotFoundError(
+                f"Navigation target does not exist: {stripped}"
+            )
+        if not candidate.is_dir():
+            raise WorkspaceNotADirectoryError(
+                f"Navigation target is not a directory: {stripped}"
+            )
+        self._active_directory = candidate
+        return str(candidate)
+
     def clear_directory(self) -> Optional[str]:
         previous = str(self._active_directory) if self._active_directory else None
         self._active_directory = None
@@ -1418,6 +1732,83 @@ class DirectoryOperations:
             raise OperationError(f"Rename failed: {exc}")
         return dst
 
+    def inspect_target(self, path: str) -> dict:
+        """
+        Collect deterministic, read-only metadata for a file or directory.
+
+        For a path that is the ACTIVE_WORKSPACE sentinel or an absolute
+        path, resolve directly; for a relative path, resolve against the
+        active workspace.
+
+        Returns a dict with keys appropriate to the target type. Never
+        modifies the filesystem.
+        """
+        import os as _os
+
+        # Determine the resolved path
+        candidate = Path(path)
+        if candidate.is_absolute():
+            resolved = candidate.resolve()
+        else:
+            ws = self._require_workspace()
+            resolved = (ws / path).resolve()
+            # Containment check — inspection is workspace-bounded
+            try:
+                resolved.relative_to(ws)
+            except ValueError:
+                raise WorkspaceViolationError(
+                    f"Inspect target is outside the active workspace: {path}"
+                )
+
+        if not resolved.exists():
+            raise FileNotFoundInWorkspace(f"Inspect target does not exist: {path}")
+
+        stat = resolved.stat()
+        mtime = datetime.fromtimestamp(stat.st_mtime, tz=timezone.utc).isoformat()
+
+        if resolved.is_file():
+            is_readable = _os.access(resolved, _os.R_OK)
+            is_writable = _os.access(resolved, _os.W_OK)
+            result: dict = {
+                "operation": "INSPECT",
+                "target_type": "file",
+                "name": resolved.name,
+                "path": str(resolved),
+                "extension": resolved.suffix,
+                "size": stat.st_size,
+                "modified": mtime,
+                "readable": is_readable,
+                "writable": is_writable,
+            }
+            return result
+
+        if resolved.is_dir():
+            file_count = 0
+            dir_count = 0
+            try:
+                for item in resolved.iterdir():
+                    if item.is_file():
+                        file_count += 1
+                    elif item.is_dir():
+                        dir_count += 1
+            except PermissionError:
+                pass  # partial count if permission denied
+            result = {
+                "operation": "INSPECT",
+                "target_type": "directory",
+                "name": resolved.name,
+                "path": str(resolved),
+                "file_count": file_count,
+                "directory_count": dir_count,
+                "modified": mtime,
+            }
+            return result
+
+        # Exists but is neither file nor directory (symlink edge case, etc.)
+        raise OperationError(
+            f"Inspect target is not a regular file or directory: {path}"
+        )
+
 
 class DirectoryOperationExecutor:
     """
@@ -1453,7 +1844,28 @@ class DirectoryOperationExecutor:
         except AttributeError as exc:
             # The connected ops object doesn't implement this operation.
             return self._error(cmd, DirErrorCode.CAPABILITY_UNAVAILABLE, str(exc))
-        except Exception as exc:  # last-resort isolation boundary
+        except Exception as exc:
+            # Last-resort isolation boundary — also handles exceptions from the
+            # real DirectoryControl (e.g. path_security.WorkspaceNotFoundError
+            # which is a different class from our local WorkspaceNotFoundError).
+            # Classify by message content so NOT_FOUND / NOT_A_DIRECTORY remain
+            # accurate even when crossing exception class boundaries.
+            msg = str(exc)
+            msg_lower = msg.lower()
+            if "not a directory" in msg_lower or "is not a directory" in msg_lower:
+                return self._error(cmd, DirErrorCode.NOT_A_DIRECTORY, msg)
+            if (
+                "does not exist" in msg_lower
+                or "not exist" in msg_lower
+                or "not found" in msg_lower
+                or "no active workspace" in msg_lower
+                or "workspace directory does not exist" in msg_lower
+            ):
+                if "no active workspace" in msg_lower:
+                    return self._error(cmd, DirErrorCode.NO_ACTIVE_WORKSPACE, msg)
+                return self._error(cmd, DirErrorCode.NOT_FOUND, msg)
+            if "outside" in msg_lower or "boundary" in msg_lower:
+                return self._error(cmd, DirErrorCode.OUT_OF_WORKSPACE, msg)
             return self._error(cmd, DirErrorCode.OPERATION_FAILED,
                                 f"Unexpected filesystem error: {exc}")
 
@@ -1521,6 +1933,29 @@ class DirectoryOperationExecutor:
         if intent == Intent.SWITCH_DIRECTORY:
             resolved = self.ops.switch_directory(cmd.target)
             return self._ok(cmd, resolved)
+
+        if intent == Intent.NAVIGATE:
+            resolved = self.ops.navigate_directory(cmd.target)
+            return self._ok(cmd, resolved)
+
+        if intent == Intent.INSPECT:
+            # ACTIVE_WORKSPACE sentinel → inspect the active workspace itself
+            if cmd.target in (None, ACTIVE_WORKSPACE):
+                active = self.ops.get_active_directory()
+                if active is None:
+                    return self._error(cmd, DirErrorCode.NO_ACTIVE_WORKSPACE,
+                                        "No active workspace is set.")
+                inspection = self.ops.inspect_target(active)
+            else:
+                inspection = self.ops.inspect_target(cmd.target)
+            return PreprocessorResult(
+                success=True, domain=Domain.DIRECTORY, intent=cmd.intent,
+                operation="INSPECT",
+                target=inspection.get("path") or cmd.target,
+                result=inspection,
+                confidence=1.0, requires_llm=False,
+                metadata={"command": cmd.to_dict()},
+            )
 
         if intent == Intent.RENAME:
             path = self.ops.rename(cmd.source, cmd.destination)
